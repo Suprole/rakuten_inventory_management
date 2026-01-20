@@ -298,8 +298,7 @@ function yen_(n) {
 function sendPoEmailOnSent_(poId) {
   var toList = getPoEmailRecipients_();
   if (!toList.length) {
-    Logger.log('[sendPoEmailOnSent_] PO_EMAIL_RECIPIENTS is empty; skip');
-    return;
+    throw new Error('PO_EMAIL_RECIPIENTS is empty');
   }
 
   // 既存の詳細取得を再利用（事故を避ける）

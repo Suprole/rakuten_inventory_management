@@ -107,7 +107,12 @@ export default function PODetailPage() {
       return;
     }
     setStatus('sent');
-    alert('発注を送信しました');
+    if ('mail_sent' in result && result.mail_sent === false) {
+      const reason = 'mail_error' in result && result.mail_error ? result.mail_error : 'unknown';
+      alert(`発注は送信済みにしましたが、メール送信に失敗しました: ${reason}`);
+    } else {
+      alert('発注を送信しました');
+    }
     invalidateRemote('po:list');
     invalidateRemote(`po:detail:${id}`);
     detailState.refresh();

@@ -77,6 +77,9 @@ export const PoUpdateStatusPayloadSchema = z.object({
 });
 export const PoUpdateStatusOkSchema = z.object({
   ok: z.literal(true),
+  // 送信（sent）時のメール送信結果（任意）
+  mail_sent: z.boolean().optional(),
+  mail_error: z.string().optional(),
 });
 export const PoUpdateStatusNotFoundSchema = z.object({
   ok: z.literal(false),
