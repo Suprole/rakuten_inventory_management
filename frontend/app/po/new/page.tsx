@@ -16,6 +16,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -32,17 +39,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
-import {
   ArrowLeft,
   ShoppingCart,
   Plus,
   AlertCircle,
-  Check,
   Package,
   Search,
   X,
@@ -68,6 +68,10 @@ interface POItem {
   lot_size: number;
 }
 
+type RiskFilter = 'all' | 'red' | 'yellow' | 'green';
+type BrowseMode = 'search' | 'all';
+type DisplayMode = 'flat' | 'grouped';
+
 export default function PONewPage() {
   const router = useRouter();
   const itemMetricsState = useItemMetrics();
@@ -81,23 +85,27 @@ export default function PONewPage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('recommended');
+  const [browseMode, setBrowseMode] = useState<BrowseMode>('search');
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('flat');
 
-  // 発注推奨のある商品（reorder_qty_suggested > 0）
-  const recommendedItems = itemMetrics.filter(
-    (item) => item.reorder_qty_suggested > 0
-  );
-
-  // 全商品から検索（推奨のないものも含む）
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase();
-    return itemMetrics.filter(
-      (item) =>
-        item.internal_id.toLowerCase().includes(query) ||
-        item.name.toLowerCase().includes(query)
-    );
-  }, [itemMetrics, searchQuery]);
+  const candidateItems = useMemo(() => {
+    const base =
+      browseMode === 'all'
+        ? itemMetrics
+        : searchQuery.trim()
+          ? itemMetrics.filter((item) => {
+              const q = searchQuery.toLowerCase();
+              return (
+                item.internal_id.toLowerCase().includes(q) ||
+                item.name.toLowerCase().includes(q)
+              );
+            })
+          : [];
+    const filtered =
+      riskFilter === 'all' ? base : base.filter((i) => i.risk_level === riskFilter);
+    return filtered;
+  }, [browseMode, itemMetrics, riskFilter, searchQuery]);
 
   const formatDays = (v: number | null | undefined) => {
     if (v === null || v === undefined || Number.isNaN(v)) return '-';
@@ -142,36 +150,6 @@ export default function PONewPage() {
     const newPOItems = { ...poItems };
     delete newPOItems[internalId];
     setPOItems(newPOItems);
-  };
-
-  const handleToggleItem = (internalId: string) => {
-    if (selectedItems.has(internalId)) {
-      handleRemoveItem(internalId);
-    } else {
-      handleAddItem(internalId);
-    }
-  };
-
-  const handleSelectAllRecommended = () => {
-    if (selectedItems.size === recommendedItems.length && 
-        recommendedItems.every(item => selectedItems.has(item.internal_id))) {
-      // 推奨商品を全解除
-      const newSelected = new Set(selectedItems);
-      const newPOItems = { ...poItems };
-      for (const item of recommendedItems) {
-        newSelected.delete(item.internal_id);
-        delete newPOItems[item.internal_id];
-      }
-      setSelectedItems(newSelected);
-      setPOItems(newPOItems);
-    } else {
-      // 推奨商品を全選択
-      for (const item of recommendedItems) {
-        if (!selectedItems.has(item.internal_id)) {
-          handleAddItem(item.internal_id);
-        }
-      }
-    }
   };
 
   const handleUpdateQty = (internalId: string, qty: number) => {
@@ -258,8 +236,17 @@ export default function PONewPage() {
     }
   };
 
-  const allRecommendedSelected = recommendedItems.length > 0 && 
-    recommendedItems.every(item => selectedItems.has(item.internal_id));
+  const groupedByRisk = useMemo(() => {
+    const buckets: Record<'red' | 'yellow' | 'green', ItemMetric[]> = {
+      red: [],
+      yellow: [],
+      green: [],
+    };
+    for (const it of candidateItems) {
+      buckets[it.risk_level].push(it);
+    }
+    return buckets;
+  }, [candidateItems]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -283,136 +270,21 @@ export default function PONewPage() {
 
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
-            {/* 商品選択タブ */}
+            {/* 商品選択（検索から追加） */}
             <Card>
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <Plus className="h-5 w-5" />
-                        発注商品を選択
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        推奨タブから選択、または検索タブで任意の商品を追加
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <TabsList className="mt-4">
-                    <TabsTrigger value="recommended" className="gap-2">
-                      <AlertCircle className="h-4 w-4" />
-                      発注推奨
-                      {recommendedItems.length > 0 && (
-                        <Badge variant="secondary" className="ml-1">
-                          {recommendedItems.length}
-                        </Badge>
-                      )}
-                    </TabsTrigger>
-                    <TabsTrigger value="search" className="gap-2">
-                      <Search className="h-4 w-4" />
-                      検索から追加
-                    </TabsTrigger>
-                  </TabsList>
-                </CardHeader>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  発注商品を追加
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  検索から商品を追加します。必要に応じてリスク別の絞り込み・表示切替ができます。
+                </CardDescription>
+              </CardHeader>
 
-                <TabsContent value="recommended" className="mt-0">
-                  <CardContent className="p-0 pt-2">
-                    {recommendedItems.length > 0 && (
-                      <div className="px-6 pb-4 flex justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleSelectAllRecommended}
-                        >
-                          {allRecommendedSelected ? '推奨を全解除' : '推奨を全選択'}
-                        </Button>
-                      </div>
-                    )}
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="hover:bg-transparent">
-                            <TableHead className="w-12"></TableHead>
-                            <TableHead className="font-semibold">社内ID</TableHead>
-                            <TableHead className="font-semibold">商品名</TableHead>
-                            <TableHead className="font-semibold">リスク</TableHead>
-                            <TableHead className="text-right font-semibold">
-                              現在庫
-                            </TableHead>
-                            <TableHead className="text-right font-semibold">
-                              在庫日数
-                            </TableHead>
-                            <TableHead className="text-right font-semibold">
-                              推奨数量
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {recommendedItems.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={7} className="h-24 text-center">
-                                <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                  <Check className="h-8 w-8" />
-                                  <p>発注推奨商品がありません</p>
-                                  <p className="text-sm">在庫は十分な状態です</p>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            recommendedItems.map((item) => (
-                              <TableRow
-                                key={item.internal_id}
-                                className={cn(
-                                  selectedItems.has(item.internal_id) &&
-                                    'bg-primary/5'
-                                )}
-                              >
-                                <TableCell>
-                                  <Checkbox
-                                    checked={selectedItems.has(item.internal_id)}
-                                    onCheckedChange={() =>
-                                      handleToggleItem(item.internal_id)
-                                    }
-                                  />
-                                </TableCell>
-                                <TableCell className="font-mono text-sm">
-                                  <Link
-                                    href={`/items/${item.internal_id}`}
-                                    className="text-primary hover:underline"
-                                  >
-                                    {item.internal_id}
-                                  </Link>
-                                </TableCell>
-                                <TableCell className="font-medium max-w-[200px] truncate">
-                                  {item.name}
-                                </TableCell>
-                                <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
-                                <TableCell className="text-right font-mono text-sm">
-                                  {item.derived_stock.toLocaleString()}
-                                </TableCell>
-                                <TableCell
-                                  className={cn(
-                                    'text-right font-mono text-sm',
-                                    item.risk_level === 'red' && 'text-red-400',
-                                    item.risk_level === 'yellow' && 'text-yellow-400'
-                                  )}
-                                >
-                                  {formatDays(item.days_of_cover)}
-                                </TableCell>
-                                <TableCell className="text-right font-mono font-semibold text-primary">
-                                  {item.reorder_qty_suggested.toLocaleString()}
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </TabsContent>
-
-                <TabsContent value="search" className="mt-0">
-                  <CardContent className="space-y-4">
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="md:col-span-2">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
@@ -420,114 +292,231 @@ export default function PONewPage() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10"
+                        disabled={browseMode === 'all'}
                       />
                     </div>
-                    {searchQuery.trim() === '' ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                        <Search className="h-12 w-12 mb-4 opacity-50" />
-                        <p>社内IDまたは商品名を入力して検索</p>
-                        <p className="text-sm mt-1">推奨のない商品も追加できます</p>
-                      </div>
-                    ) : searchResults.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                        <p>「{searchQuery}」に一致する商品が見つかりません</p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                              <TableHead className="font-semibold">社内ID</TableHead>
-                              <TableHead className="font-semibold">商品名</TableHead>
-                              <TableHead className="font-semibold">リスク</TableHead>
-                              <TableHead className="text-right font-semibold">
-                                現在庫
-                              </TableHead>
-                              <TableHead className="text-right font-semibold">
-                                在庫日数
-                              </TableHead>
-                              <TableHead className="text-right font-semibold">
-                                推奨数量
-                              </TableHead>
-                              <TableHead className="w-24"></TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {searchResults.map((item) => (
-                              <TableRow
-                                key={item.internal_id}
-                                className={cn(
-                                  selectedItems.has(item.internal_id) &&
-                                    'bg-primary/5'
-                                )}
-                              >
-                                <TableCell className="font-mono text-sm">
-                                  <Link
-                                    href={`/items/${item.internal_id}`}
-                                    className="text-primary hover:underline"
-                                  >
-                                    {item.internal_id}
-                                  </Link>
-                                </TableCell>
-                                <TableCell className="font-medium max-w-[200px] truncate">
-                                  {item.name}
-                                </TableCell>
-                                <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
-                                <TableCell className="text-right font-mono text-sm">
-                                  {item.derived_stock.toLocaleString()}
-                                </TableCell>
-                                <TableCell
-                                  className={cn(
-                                    'text-right font-mono text-sm',
-                                    item.risk_level === 'red' && 'text-red-400',
-                                    item.risk_level === 'yellow' && 'text-yellow-400'
-                                  )}
+                    <div className="mt-2 flex items-center gap-3">
+                      <Checkbox
+                        checked={browseMode === 'all'}
+                        onCheckedChange={(v) => setBrowseMode(v ? 'all' : 'search')}
+                        id="browse-all"
+                      />
+                      <Label htmlFor="browse-all" className="text-sm text-muted-foreground cursor-pointer">
+                        全件を表示（検索なしでブラウズ）
+                      </Label>
+                    </div>
+                  </div>
+                  <div className="grid gap-3">
+                    <div>
+                      <Label className="text-sm">リスク</Label>
+                      <Select value={riskFilter} onValueChange={(v) => setRiskFilter(v as RiskFilter)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="リスク" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">すべて</SelectItem>
+                          <SelectItem value="red">緊急（赤）</SelectItem>
+                          <SelectItem value="yellow">警告（黄）</SelectItem>
+                          <SelectItem value="green">安全（緑）</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-sm">表示</Label>
+                      <Select value={displayMode} onValueChange={(v) => setDisplayMode(v as DisplayMode)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="表示" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="flat">一覧</SelectItem>
+                          <SelectItem value="grouped">リスク別</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {browseMode === 'search' && searchQuery.trim() === '' ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                    <Search className="h-10 w-10 mb-3 opacity-50" />
+                    <p>社内IDまたは商品名を入力して検索</p>
+                    <p className="text-sm mt-1">または「全件を表示」をONにしてブラウズできます</p>
+                  </div>
+                ) : candidateItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                    <p>条件に一致する商品が見つかりません</p>
+                  </div>
+                ) : displayMode === 'grouped' ? (
+                  <div className="space-y-4">
+                    {(['red', 'yellow', 'green'] as const).map((risk) => {
+                      const list = groupedByRisk[risk];
+                      if (riskFilter !== 'all' && riskFilter !== risk) return null;
+                      return (
+                        <Card key={risk} className="border-border">
+                          <CardHeader className="py-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              {getRiskBadge(risk)}
+                              <span className="text-sm text-muted-foreground">{list.length}件</span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-0">
+                            {list.length === 0 ? (
+                              <div className="px-6 py-4 text-sm text-muted-foreground">該当なし</div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="hover:bg-transparent">
+                                      <TableHead className="font-semibold">社内ID</TableHead>
+                                      <TableHead className="font-semibold">商品名</TableHead>
+                                      <TableHead className="text-right font-semibold">現在庫</TableHead>
+                                      <TableHead className="text-right font-semibold">在庫日数</TableHead>
+                                      <TableHead className="text-right font-semibold">推奨数量</TableHead>
+                                      <TableHead className="w-24"></TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {list.map((item) => (
+                                      <TableRow
+                                        key={item.internal_id}
+                                        className={cn(selectedItems.has(item.internal_id) && 'bg-primary/5')}
+                                      >
+                                        <TableCell className="font-mono text-sm">
+                                          <Link href={`/items/${item.internal_id}`} className="text-primary hover:underline">
+                                            {item.internal_id}
+                                          </Link>
+                                        </TableCell>
+                                        <TableCell className="font-medium max-w-[260px] truncate">
+                                          {item.name}
+                                        </TableCell>
+                                        <TableCell className="text-right font-mono text-sm">
+                                          {item.derived_stock.toLocaleString()}
+                                        </TableCell>
+                                        <TableCell
+                                          className={cn(
+                                            'text-right font-mono text-sm',
+                                            item.risk_level === 'red' && 'text-destructive',
+                                            item.risk_level === 'yellow' && 'text-warning'
+                                          )}
+                                        >
+                                          {formatDays(item.days_of_cover)}
+                                        </TableCell>
+                                        <TableCell className="text-right font-mono text-sm">
+                                          {item.reorder_qty_suggested > 0 ? (
+                                            <span className="text-primary font-semibold">
+                                              {item.reorder_qty_suggested.toLocaleString()}
+                                            </span>
+                                          ) : (
+                                            <span className="text-muted-foreground">-</span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell>
+                                          {selectedItems.has(item.internal_id) ? (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => handleRemoveItem(item.internal_id)}
+                                              className="text-destructive hover:text-destructive"
+                                            >
+                                              <X className="h-4 w-4 mr-1" />
+                                              削除
+                                            </Button>
+                                          ) : (
+                                            <Button variant="outline" size="sm" onClick={() => handleAddItem(item.internal_id)}>
+                                              <Plus className="h-4 w-4 mr-1" />
+                                              追加
+                                            </Button>
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="font-semibold">社内ID</TableHead>
+                          <TableHead className="font-semibold">商品名</TableHead>
+                          <TableHead className="font-semibold">リスク</TableHead>
+                          <TableHead className="text-right font-semibold">現在庫</TableHead>
+                          <TableHead className="text-right font-semibold">在庫日数</TableHead>
+                          <TableHead className="text-right font-semibold">推奨数量</TableHead>
+                          <TableHead className="w-24"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {candidateItems.map((item) => (
+                          <TableRow
+                            key={item.internal_id}
+                            className={cn(selectedItems.has(item.internal_id) && 'bg-primary/5')}
+                          >
+                            <TableCell className="font-mono text-sm">
+                              <Link href={`/items/${item.internal_id}`} className="text-primary hover:underline">
+                                {item.internal_id}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="font-medium max-w-[200px] truncate">
+                              {item.name}
+                            </TableCell>
+                            <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">
+                              {item.derived_stock.toLocaleString()}
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                'text-right font-mono text-sm',
+                                item.risk_level === 'red' && 'text-destructive',
+                                item.risk_level === 'yellow' && 'text-warning'
+                              )}
+                            >
+                              {formatDays(item.days_of_cover)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm">
+                              {item.reorder_qty_suggested > 0 ? (
+                                <span className="text-primary font-semibold">
+                                  {item.reorder_qty_suggested.toLocaleString()}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {selectedItems.has(item.internal_id) ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveItem(item.internal_id)}
+                                  className="text-destructive hover:text-destructive"
                                 >
-                                  {formatDays(item.days_of_cover)}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-sm">
-                                  {item.reorder_qty_suggested > 0 ? (
-                                    <span className="text-primary font-semibold">
-                                      {item.reorder_qty_suggested.toLocaleString()}
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted-foreground">-</span>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {selectedItems.has(item.internal_id) ? (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleRemoveItem(item.internal_id)}
-                                      className="text-destructive hover:text-destructive"
-                                    >
-                                      <X className="h-4 w-4 mr-1" />
-                                      削除
-                                    </Button>
-                                  ) : (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleAddItem(item.internal_id)}
-                                    >
-                                      <Plus className="h-4 w-4 mr-1" />
-                                      追加
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        <p className="text-sm text-muted-foreground mt-2 px-2">
-                          {searchResults.length}件の商品が見つかりました
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </TabsContent>
-              </Tabs>
+                                  <X className="h-4 w-4 mr-1" />
+                                  削除
+                                </Button>
+                              ) : (
+                                <Button variant="outline" size="sm" onClick={() => handleAddItem(item.internal_id)}>
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  追加
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <p className="text-sm text-muted-foreground mt-2 px-2">
+                      {candidateItems.length}件の商品が見つかりました
+                    </p>
+                  </div>
+                )}
+              </CardContent>
             </Card>
 
             {/* 発注明細編集 */}
