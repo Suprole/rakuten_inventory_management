@@ -65,6 +65,22 @@ interface POItem {
   lot_size: number;
 }
 
+function matchesItemQuery(item: ItemMetric, q: string): boolean {
+  const qq = q.trim().toLowerCase();
+  if (!qq) return true;
+  if (item.internal_id.toLowerCase().includes(qq)) return true;
+  if (item.name.toLowerCase().includes(qq)) return true;
+  // SKU/商品管理番号/楽天タイトル（ETLがlistingsを埋め込んでいる場合）
+  if (item.listings && item.listings.length > 0) {
+    for (const l of item.listings) {
+      if (l.rakuten_item_no.toLowerCase().includes(qq)) return true;
+      if (l.rakuten_sku.toLowerCase().includes(qq)) return true;
+      if (l.title.toLowerCase().includes(qq)) return true;
+    }
+  }
+  return false;
+}
+
 type RiskFilter = 'all' | 'red' | 'yellow' | 'green';
 type BrowseMode = 'search' | 'all';
 type DisplayMode = 'flat' | 'grouped';
@@ -101,11 +117,7 @@ export default function PONewPage() {
         ? itemMetrics
         : searchQuery.trim()
           ? itemMetrics.filter((item) => {
-              const q = searchQuery.toLowerCase();
-              return (
-                item.internal_id.toLowerCase().includes(q) ||
-                item.name.toLowerCase().includes(q)
-              );
+              return matchesItemQuery(item, searchQuery);
             })
           : [];
     const filtered =

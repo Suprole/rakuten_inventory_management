@@ -42,6 +42,22 @@ function parseSortDirection(v: string | null): SortDirection {
   return v === 'desc' ? 'desc' : 'asc';
 }
 
+function matchesItemQuery(item: ItemMetric, q: string): boolean {
+  const qq = q.trim().toLowerCase();
+  if (!qq) return true;
+  if (item.internal_id.toLowerCase().includes(qq)) return true;
+  if (item.name.toLowerCase().includes(qq)) return true;
+  // SKU/商品管理番号/楽天タイトル（ETLがlistingsを埋め込んでいる場合）
+  if (item.listings && item.listings.length > 0) {
+    for (const l of item.listings) {
+      if (l.rakuten_item_no.toLowerCase().includes(qq)) return true;
+      if (l.rakuten_sku.toLowerCase().includes(qq)) return true;
+      if (l.title.toLowerCase().includes(qq)) return true;
+    }
+  }
+  return false;
+}
+
 export default function ItemsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -86,12 +102,7 @@ export default function ItemsPage() {
 
     // 検索フィルタ
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      items = items.filter(
-        (item) =>
-          item.internal_id.toLowerCase().includes(query) ||
-          item.name.toLowerCase().includes(query)
-      );
+      items = items.filter((item) => matchesItemQuery(item, searchQuery));
     }
 
     // リスクレベルフィルタ
