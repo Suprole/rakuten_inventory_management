@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Package, ShoppingCart, AlertTriangle } from 'lucide-react';
+import { signOut, useSession } from 'next-auth/react';
+import { Button } from '@/components/ui/button';
 
 const navItems = [
   {
@@ -25,6 +27,8 @@ const navItems = [
 
 export function Navigation() {
   const pathname = usePathname();
+  const session = useSession();
+  const email = session.data?.user?.email || '';
 
   return (
     <nav className="border-b border-border bg-card">
@@ -62,9 +66,17 @@ export function Navigation() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              Metro & Windy 店舗
+            <span className="hidden sm:inline text-sm text-muted-foreground">
+              {email ? email : 'Metro & Windy 店舗'}
             </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-transparent"
+              onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+            >
+              ログアウト
+            </Button>
           </div>
         </div>
       </div>

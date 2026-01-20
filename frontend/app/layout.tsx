@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
+import { AuthSessionProvider } from '@/components/session-provider'
 
 const geist = Geist({ subsets: ["latin"] });
 const geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -38,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="ja" className="dark">
       <body className={`${geist.className} ${geistMono.className} font-sans antialiased`}>
-        {children}
+        <AuthSessionProvider>{children}</AuthSessionProvider>
         <Analytics />
       </body>
     </html>
