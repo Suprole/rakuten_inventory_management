@@ -23,6 +23,11 @@ export const ItemMetricSchema = z.object({
   derived_stock: z.number(),
   avg_daily_consumption: z.number(),
   days_of_cover: z.number().nullable(), // ETL側で∞はnull等に正規化して出す前提
+  // 店舗別 売上（社内ID単位、BOM展開後）。ETL未更新に備えて optional
+  metro_last_month_sales: z.number().optional(),
+  metro_this_month_sales: z.number().optional(),
+  windy_last_month_sales: z.number().optional(),
+  windy_this_month_sales: z.number().optional(),
   lead_time_days: z.number(),
   safety_stock: z.number(),
   lot_size: z.number(),

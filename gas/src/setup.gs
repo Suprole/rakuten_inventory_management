@@ -218,6 +218,9 @@ function syncListingsFromRakutenSheets() {
  * - bom.listing_id は listings.listing_id をそのまま採用
  * - listings.rakuten_sku と items.internal_id が（大小文字無視で）完全一致する場合：
  *     internal_id = その値、qty = 1 を自動入力
+ * - 上記で一致しない場合のみ、listings.rakuten_item_no（商品管理番号）と items.internal_id（社内id）が
+ *   （大小文字無視で）完全一致する場合：
+ *     internal_id = その値、qty = 1 を自動入力
  * - 一致しない場合：
  *     internal_id は空欄のまま（人が後で埋める）、qtyも空欄のまま
  *
@@ -252,7 +255,7 @@ function syncBomFromListingsSemiAuto() {
   var listingsValues = listingsSheet.getDataRange().getValues();
   if (listingsValues.length < 2) throw new Error('listings is empty');
   var listingsHeader = indexHeader(listingsValues[0]);
-  requireCols(listingsHeader, ['listing_id', 'rakuten_sku'], 'listings');
+  requireCols(listingsHeader, ['listing_id', 'rakuten_sku', 'rakuten_item_no'], 'listings');
 
   // bom読み込み（既存保持＆プレースホルダ補完）
   var bomSheet = ss.getSheetByName('bom');
@@ -310,7 +313,13 @@ function syncBomFromListingsSemiAuto() {
     seenListing[listing_id] = true;
 
     var rakutenSku = toStringSafe(rowL[listingsHeader['rakuten_sku']]);
+    var rakutenItemNo = toStringSafe(rowL[listingsHeader['rakuten_item_no']]); // 商品管理番号
+    // まずSKU番号→社内idで照合（大小文字無視の完全一致）
     var matchInternal = rakutenSku ? internalIdByLower[rakutenSku.toLowerCase()] : '';
+    // SKUで一致しなかったものに対してのみ、商品管理番号→社内idで照合（大小文字無視の完全一致）
+    if (!matchInternal && rakutenItemNo) {
+      matchInternal = internalIdByLower[rakutenItemNo.toLowerCase()] || '';
+    }
 
     var existing = existingRowsByListing[listing_id];
     if (!existing || existing.length === 0) {

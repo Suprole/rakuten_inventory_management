@@ -30,10 +30,10 @@ import Loading from './loading';
 import { useItemMetrics } from '@/lib/use-view';
 import { useDebouncedValue } from '@/lib/use-debounced';
 
-type SortField = 'name' | 'derived_stock' | 'avg_daily_consumption' | 'days_of_cover' | 'reorder_qty_suggested';
+type SortField = 'name' | 'derived_stock' | 'days_of_cover' | 'reorder_qty_suggested';
 type SortDirection = 'asc' | 'desc';
 
-const SORT_FIELDS: SortField[] = ['name', 'derived_stock', 'avg_daily_consumption', 'days_of_cover', 'reorder_qty_suggested'];
+const SORT_FIELDS: SortField[] = ['name', 'derived_stock', 'days_of_cover', 'reorder_qty_suggested'];
 
 function parseSortField(v: string | null): SortField {
   return (v && SORT_FIELDS.includes(v as SortField) ? (v as SortField) : 'days_of_cover');
@@ -118,8 +118,6 @@ export default function ItemsPage() {
             return item.name;
           case 'derived_stock':
             return item.derived_stock;
-          case 'avg_daily_consumption':
-            return item.avg_daily_consumption;
           case 'days_of_cover':
             return item.avg_daily_consumption === 0 ? Infinity : item.days_of_cover ?? 0;
           case 'reorder_qty_suggested':
@@ -174,6 +172,11 @@ export default function ItemsPage() {
       return '∞';
     }
     return (item.days_of_cover ?? 0).toFixed(1);
+  };
+
+  const formatSales = (v: number | null | undefined) => {
+    if (v === null || v === undefined || Number.isNaN(v)) return '-';
+    return v.toLocaleString();
   };
 
   return (
@@ -269,15 +272,10 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead
-                        className="cursor-pointer text-right font-semibold hover:text-foreground"
-                        onClick={() => handleSort('avg_daily_consumption')}
-                      >
-                        <div className="flex items-center justify-end gap-1">
-                          日次消費
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </TableHead>
+                      <TableHead className="text-right font-semibold">metro先月</TableHead>
+                      <TableHead className="text-right font-semibold">metro今月</TableHead>
+                      <TableHead className="text-right font-semibold">windy先月</TableHead>
+                      <TableHead className="text-right font-semibold">windy今月</TableHead>
                       <TableHead
                         className="cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('days_of_cover')}
@@ -301,7 +299,7 @@ export default function ItemsPage() {
                   <TableBody>
                     {itemMetricsState.status === 'loading' ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
+                        <TableCell colSpan={10} className="h-24 text-center">
                           <p className="text-muted-foreground">読み込み中...</p>
                         </TableCell>
                       </TableRow>
@@ -330,9 +328,10 @@ export default function ItemsPage() {
                           <TableCell className="text-right font-mono">
                             {item.derived_stock.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {item.avg_daily_consumption.toFixed(1)}
-                          </TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.metro_last_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.metro_this_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.windy_last_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.windy_this_month_sales)}</TableCell>
                           <TableCell className="text-right font-mono">
                             <span
                               className={cn(
@@ -356,7 +355,7 @@ export default function ItemsPage() {
                       ))
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
+                        <TableCell colSpan={10} className="h-24 text-center">
                           <p className="text-muted-foreground">
                             該当する商品が見つかりませんでした
                           </p>
@@ -387,9 +386,10 @@ export default function ItemsPage() {
                           <TableCell className="text-right font-mono">
                             {item.derived_stock.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {item.avg_daily_consumption.toFixed(1)}
-                          </TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.metro_last_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.metro_this_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.windy_last_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.windy_this_month_sales)}</TableCell>
                           <TableCell className="text-right font-mono">
                             <span
                               className={cn(

@@ -166,6 +166,11 @@ function runEtlOnce() {
   var derivedStock = {};
   var avgCons = {};
   var bomByInternal = {};
+  // store別 売上（社内ID単位、BOM展開後）
+  var metroSalesLmByInternal = {};
+  var metroSalesCmByInternal = {};
+  var windySalesLmByInternal = {};
+  var windySalesCmByInternal = {};
 
   // BOMを internal_id → listing で逆引きできるようにしておく（詳細画面のSKU別表示に利用）
   for (var listingIdForBom in bomByListing) {
@@ -198,6 +203,28 @@ function runEtlOnce() {
     }
   }
 
+  // 売上（先月/今月）をBOM展開して internal_id に集計
+  for (var listingSalesId2 in metroData.salesByListing) {
+    var sales2 = metroData.salesByListing[listingSalesId2] || { LM: 0, CM: 0 };
+    var bomRows3 = bomByListing[listingSalesId2];
+    if (!bomRows3) continue;
+    for (var j2 = 0; j2 < bomRows3.length; j2++) {
+      var b3 = bomRows3[j2];
+      metroSalesLmByInternal[b3.internal_id] = (metroSalesLmByInternal[b3.internal_id] || 0) + (sales2.LM || 0) * b3.qty;
+      metroSalesCmByInternal[b3.internal_id] = (metroSalesCmByInternal[b3.internal_id] || 0) + (sales2.CM || 0) * b3.qty;
+    }
+  }
+  for (var listingSalesId3 in windyData.salesByListing) {
+    var sales3 = windyData.salesByListing[listingSalesId3] || { LM: 0, CM: 0 };
+    var bomRows4 = bomByListing[listingSalesId3];
+    if (!bomRows4) continue;
+    for (var j3 = 0; j3 < bomRows4.length; j3++) {
+      var b4 = bomRows4[j3];
+      windySalesLmByInternal[b4.internal_id] = (windySalesLmByInternal[b4.internal_id] || 0) + (sales3.LM || 0) * b4.qty;
+      windySalesCmByInternal[b4.internal_id] = (windySalesCmByInternal[b4.internal_id] || 0) + (sales3.CM || 0) * b4.qty;
+    }
+  }
+
   // 7) internal指標生成
   var buffer = 14;
   var itemMetrics = [];
@@ -223,23 +250,22 @@ function runEtlOnce() {
     var need = cons * target + safety - stock;
     var reorder = ceilToLot(Math.max(need, 0), lot);
 
-    // 詳細画面用：SKU別（先月/今月）を item_metrics に埋め込む（metro固定）
-    // NOTE: 本システムは計算基準店舗を metro とするため、内訳も metro の listing のみを出す
+    // 詳細画面用：SKU別（先月/今月）を item_metrics に埋め込む（metro/windy 両方）
     var listings = [];
     var bomRefs = bomByInternal[internal_id] || [];
     for (var bi = 0; bi < bomRefs.length; bi++) {
       var ref = bomRefs[bi];
-      if (String(ref.listing_id).indexOf('metro|') !== 0) continue;
       var lm = listingsMap[ref.listing_id];
       if (!lm || !lm.active) continue;
 
-      var stockQty = metroData.stockByListing[ref.listing_id] || 0;
-      var sales = metroData.salesByListing[ref.listing_id] || { LM: 0, CM: 0 };
+      var storeId = lm.store_id === 'windy' ? 'windy' : 'metro';
+      var stockQty = (storeId === 'windy' ? windyData.stockByListing : metroData.stockByListing)[ref.listing_id] || 0;
+      var sales = (storeId === 'windy' ? windyData.salesByListing : metroData.salesByListing)[ref.listing_id] || { LM: 0, CM: 0 };
       var rHat = rHatByListing[ref.listing_id] || 0;
 
       listings.push({
         listing_id: ref.listing_id,
-        store_id: 'metro',
+        store_id: storeId,
         rakuten_item_no: lm.rakuten_item_no,
         rakuten_sku: lm.rakuten_sku,
         title: lm.title || '',
@@ -259,6 +285,10 @@ function runEtlOnce() {
       derived_stock: stock,
       avg_daily_consumption: cons,
       days_of_cover: days,
+      metro_last_month_sales: metroSalesLmByInternal[internal_id] || 0,
+      metro_this_month_sales: metroSalesCmByInternal[internal_id] || 0,
+      windy_last_month_sales: windySalesLmByInternal[internal_id] || 0,
+      windy_this_month_sales: windySalesCmByInternal[internal_id] || 0,
       lead_time_days: lead,
       safety_stock: safety,
       lot_size: lot,
