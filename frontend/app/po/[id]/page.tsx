@@ -24,9 +24,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, FileText, Send, XCircle } from 'lucide-react';
+import { ArrowLeft, FileText, Send, Trash2, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import { notFound, useParams } from 'next/navigation';
+import { notFound, useParams, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useItemMetrics } from '@/lib/use-view';
 import type { ItemMetric } from '@/lib/view-schema';
@@ -37,8 +37,10 @@ import { usePoDetail } from '@/lib/use-po';
 export default function PODetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const router = useRouter();
   const [status, setStatus] = useState<string>('draft');
   const itemMetricsState = useItemMetrics();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const detailState = usePoDetail(id);
 
@@ -122,6 +124,36 @@ export default function PODetailPage() {
     invalidateRemote('po:list');
     invalidateRemote(`po:detail:${id}`);
     detailState.refresh();
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch('/api/po/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ po_id: id }),
+      });
+      const text = await res.text();
+      const json = text ? (JSON.parse(text) as unknown) : ({} as unknown);
+      const obj = (json && typeof json === 'object' ? (json as Record<string, unknown>) : null);
+      const okVal = obj && typeof obj.ok === 'boolean' ? obj.ok : undefined;
+      if (!res.ok || okVal === false) {
+        const errVal = obj && typeof obj.error === 'string' ? obj.error : undefined;
+        const msgVal = obj && typeof obj.message === 'string' ? obj.message : undefined;
+        throw new Error(msgVal || errVal || `http_${res.status}`);
+      }
+      invalidateRemote('po:list');
+      invalidateRemote(`po:detail:${id}`);
+      alert('発注を削除しました');
+      router.push('/po');
+      router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`削除に失敗しました: ${msg}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getItemName = (internalId: string) => {
@@ -421,6 +453,37 @@ export default function PODetailPage() {
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                           キャンセルする
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full bg-transparent text-destructive hover:text-destructive"
+                        size="lg"
+                        disabled={isDeleting}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        削除
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>発注を削除しますか？</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          この操作は取り消せません。発注（{header?.po_id || id}）を完全に削除します。
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>戻る</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDelete}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          削除する
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>

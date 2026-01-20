@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Navigation } from '@/components/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,13 +18,11 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { usePoList } from '@/lib/use-po';
 import { useRouter } from 'next/navigation';
-import { invalidateRemote } from '@/lib/use-remote';
 
 export default function POListPage() {
   const router = useRouter();
   const poListState = usePoList();
   const items = useMemo(() => poListState.data ?? [], [poListState.data]);
-  const [deletingPoId, setDeletingPoId] = useState<string | null>(null);
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -62,36 +60,6 @@ export default function POListPage() {
       cancelled: items.filter((po) => po.status === 'cancelled').length,
     };
   }, [items]);
-
-  const handleDelete = async (poId: string) => {
-    if (!poId) return;
-    const ok = confirm(`発注 ${poId} を削除します。\nこの操作は取り消せません。\n\n本当に削除しますか？`);
-    if (!ok) return;
-    setDeletingPoId(poId);
-    try {
-      const res = await fetch('/api/po/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ po_id: poId }),
-      });
-      const text = await res.text();
-      const json = text ? (JSON.parse(text) as unknown) : ({} as unknown);
-      const obj = (json && typeof json === 'object' ? (json as Record<string, unknown>) : null);
-      const okVal = obj && typeof obj.ok === 'boolean' ? obj.ok : undefined;
-      if (!res.ok || okVal === false) {
-        const errVal = obj && typeof obj.error === 'string' ? obj.error : undefined;
-        const msgVal = obj && typeof obj.message === 'string' ? obj.message : undefined;
-        throw new Error(msgVal || errVal || `http_${res.status}`);
-      }
-      invalidateRemote('po:list');
-      await poListState.refresh();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      alert(`削除に失敗しました: ${msg}`);
-    } finally {
-      setDeletingPoId(null);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -180,19 +148,18 @@ export default function POListPage() {
                       合計数量
                     </TableHead>
                     <TableHead className="font-semibold">備考</TableHead>
-                    <TableHead className="text-right font-semibold">削除</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {poListState.status === 'loading' && items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <p className="text-muted-foreground">読み込み中...</p>
                       </TableCell>
                     </TableRow>
                   ) : poListState.status === 'error' && items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <div className="space-y-2">
                           <p className="text-destructive">読み込みに失敗しました: {poListState.error}</p>
                           <Button variant="outline" size="sm" onClick={poListState.refresh} className="bg-transparent">
@@ -203,7 +170,7 @@ export default function POListPage() {
                     </TableRow>
                   ) : items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <p className="text-muted-foreground">
                           発注データがありません
                         </p>
@@ -246,20 +213,6 @@ export default function POListPage() {
                           {po.note || (
                             <span className="text-muted-foreground">-</span>
                           )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            disabled={deletingPoId === po.po_id || po.status === 'sent'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleDelete(po.po_id);
-                            }}
-                          >
-                            削除
-                          </Button>
                         </TableCell>
                       </TableRow>
                     ))
