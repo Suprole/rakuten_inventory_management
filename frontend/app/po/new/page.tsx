@@ -42,7 +42,6 @@ import {
   ArrowLeft,
   ShoppingCart,
   Plus,
-  AlertCircle,
   Package,
   Search,
   X,
@@ -60,8 +59,6 @@ interface POItem {
   name: string;
   qty: number;
   unit_cost: number;
-  basis_need_qty: number;
-  basis_days_of_cover: number | null;
   risk_level: 'red' | 'yellow' | 'green';
   derived_stock: number;
   avg_daily_consumption: number;
@@ -145,8 +142,6 @@ export default function PONewPage() {
         name: item.name,
         qty: qty,
         unit_cost: item.default_unit_cost || 0,
-        basis_need_qty: item.need_qty,
-        basis_days_of_cover: item.days_of_cover,
         risk_level: item.risk_level,
         derived_stock: item.derived_stock,
         avg_daily_consumption: item.avg_daily_consumption,
@@ -209,8 +204,6 @@ export default function PONewPage() {
         internal_id: item.internal_id,
         qty: item.qty,
         unit_cost: item.unit_cost,
-        basis_need_qty: item.basis_need_qty,
-        basis_days_of_cover: item.basis_days_of_cover ?? undefined,
       })),
     };
     try {
@@ -618,9 +611,6 @@ export default function PONewPage() {
                         <TableRow className="hover:bg-transparent">
                           <TableHead className="font-semibold">商品</TableHead>
                           <TableHead className="text-right font-semibold">
-                            在庫日数
-                          </TableHead>
-                          <TableHead className="text-right font-semibold">
                             推奨数量
                           </TableHead>
                           <TableHead className="text-right font-semibold">
@@ -657,9 +647,6 @@ export default function PONewPage() {
                                     {getRiskBadge(poItem.risk_level)}
                                   </div>
                                 </div>
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                                {formatDays(poItem.basis_days_of_cover)}
                               </TableCell>
                               <TableCell className="text-right font-mono text-sm">
                                 {originalItem && originalItem.reorder_qty_suggested > 0 ? (
@@ -725,41 +712,6 @@ export default function PONewPage() {
               </Card>
             )}
 
-            {/* 発注根拠の説明 */}
-            <Card className="border-dashed">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <AlertCircle className="h-4 w-4" />
-                  発注推奨数量の計算根拠
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm text-muted-foreground">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-3 rounded-lg bg-secondary/50">
-                      <p className="font-medium text-foreground mb-1">必要数量（need_qty）</p>
-                      <code className="text-xs bg-background px-2 py-1 rounded">
-                        avg_daily_consumption * target_cover_days + safety_stock - derived_stock
-                      </code>
-                    </div>
-                    <div className="p-3 rounded-lg bg-secondary/50">
-                      <p className="font-medium text-foreground mb-1">発注推奨数量</p>
-                      <code className="text-xs bg-background px-2 py-1 rounded">
-                        ceil(max(need_qty, 0) / lot_size) * lot_size
-                      </code>
-                    </div>
-                  </div>
-                  <p>
-                    <span className="font-medium text-foreground">target_cover_days</span> = lead_time_days + 14（バッファ）
-                  </p>
-                  <p>
-                    発注明細に記録される <span className="font-medium text-foreground">basis_need_qty</span>（丸め前必要数）と
-                    <span className="font-medium text-foreground">basis_days_of_cover</span>（発注時点の在庫日数）は、
-                    発注判断の根拠として保存されます。
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* サイドバー：発注サマリー */}
