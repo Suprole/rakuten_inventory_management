@@ -295,6 +295,112 @@ function yen_(n) {
   return '¥' + Math.round(x).toLocaleString();
 }
 
+function csvEscape_(v) {
+  var s = String(v === null || v === undefined ? '' : v);
+  // 改行/カンマ/ダブルクオートを含む場合はダブルクオートで囲み、内部の"は""にする
+  if (/[,"\r\n]/.test(s)) {
+    s = '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function buildPoCsv_(poId, sentDate, supplierVal, noteVal, lines) {
+  var rows = [];
+  // 先頭にBOM（Excel向け）
+  var BOM = '\uFEFF';
+  rows.push(['発注ID', poId]);
+  rows.push(['発注日', sentDate]);
+  if (supplierVal) rows.push(['サプライヤー', supplierVal]);
+  if (noteVal) rows.push(['備考', noteVal]);
+  rows.push([]); // 空行
+  rows.push(['発注ID', '商品コード', '数量(個)', '単価', '合計額']);
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    var qty = Number(ln.qty || 0);
+    var unitCost = ln.unit_cost !== undefined ? Number(ln.unit_cost) : 0;
+    var amt = qty * unitCost;
+    rows.push([poId, ln.internal_id, qty, yen_(unitCost), yen_(amt)]);
+  }
+  var totalQty = 0;
+  var totalAmount = 0;
+  for (var j = 0; j < lines.length; j++) {
+    var ln2 = lines[j];
+    var qty2 = Number(ln2.qty || 0);
+    var unitCost2 = ln2.unit_cost !== undefined ? Number(ln2.unit_cost) : 0;
+    totalQty += qty2;
+    totalAmount += qty2 * unitCost2;
+  }
+  rows.push([]);
+  rows.push(['発注件数', lines.length + '件']);
+  rows.push(['合計数量', totalQty + '個']);
+  rows.push(['合計発注額', yen_(totalAmount)]);
+
+  var csv = rows
+    .map(function (r) {
+      return r.map(csvEscape_).join(',');
+    })
+    .join('\r\n');
+  return BOM + csv;
+}
+
+function buildPoPdfBlob_(poId, sentDate, supplierVal, noteVal, lines, totalQty, totalAmount) {
+  var rowsHtml = '';
+  for (var k = 0; k < lines.length; k++) {
+    var ln = lines[k];
+    var qty = Number(ln.qty || 0);
+    var unitCost = ln.unit_cost !== undefined ? Number(ln.unit_cost) : 0;
+    var amt = qty * unitCost;
+    rowsHtml +=
+      '<tr>' +
+        '<td style="border:1px solid #444;padding:6px;white-space:nowrap;">' + escapeHtml_(poId) + '</td>' +
+        '<td style="border:1px solid #444;padding:6px;white-space:nowrap;">' + escapeHtml_(ln.internal_id) + '</td>' +
+        '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(String(qty)) + '</td>' +
+        '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(unitCost)) + '</td>' +
+        '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(amt)) + '</td>' +
+      '</tr>';
+  }
+
+  var htmlDoc =
+    '<!doctype html>' +
+    '<html><head><meta charset="utf-8"/>' +
+    '<style>' +
+      'body{font-family:Arial,Helvetica,sans-serif;color:#111;}' +
+      'h1{font-size:18px;margin:0 0 8px 0;}' +
+      '.meta{font-size:12px;margin:0 0 12px 0;}' +
+      'table{border-collapse:collapse;width:100%;font-size:12px;}' +
+      'th{border:1px solid #444;padding:6px;background:#f0f0f0;text-align:left;}' +
+      'td{border:1px solid #444;padding:6px;}' +
+      '.right{text-align:right;}' +
+      '.summary{margin-top:10px;font-size:12px;}' +
+    '</style></head><body>' +
+      '<h1>発注依頼（楽天用）</h1>' +
+      '<div class="meta">' +
+        '<div><b>発注ID:</b> ' + escapeHtml_(poId) + '</div>' +
+        '<div><b>発注日:</b> ' + escapeHtml_(sentDate) + '</div>' +
+        (supplierVal ? '<div><b>サプライヤー:</b> ' + escapeHtml_(supplierVal) + '</div>' : '') +
+        (noteVal ? '<div><b>備考:</b> ' + escapeHtml_(noteVal) + '</div>' : '') +
+      '</div>' +
+      '<table>' +
+        '<thead><tr>' +
+          '<th>発注ID</th>' +
+          '<th>商品コード</th>' +
+          '<th class="right">数量(個)</th>' +
+          '<th class="right">単価</th>' +
+          '<th class="right">合計額</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+      '<div class="summary">' +
+        '<div><b>発注件数:</b> ' + escapeHtml_(String(lines.length)) + '件</div>' +
+        '<div><b>合計数量:</b> ' + escapeHtml_(String(totalQty)) + '個</div>' +
+        '<div><b>合計発注額:</b> ' + escapeHtml_(yen_(totalAmount)) + '</div>' +
+      '</div>' +
+    '</body></html>';
+
+  var blob = HtmlService.createHtmlOutput(htmlDoc).getBlob().getAs('application/pdf');
+  return blob;
+}
+
 function sendPoEmailOnSent_(poId) {
   var toList = getPoEmailRecipients_();
   if (!toList.length) {
@@ -373,11 +479,21 @@ function sendPoEmailOnSent_(poId) {
     '合計数量: ' + totalQty + '\n' +
     '合計発注額: ' + Math.round(totalAmount) + '\n';
 
+  // 添付（CSV + PDF）
+  var csv = buildPoCsv_(poId, sentDate, supplierVal, noteVal, lines);
+  var csvName = 'po_' + poId + '_' + sentDate + '.csv';
+  var csvBlob = Utilities.newBlob(csv, 'text/csv', csvName);
+  // PDFはHTMLをPDF化（メール本文とほぼ同等の表を添付）
+  var pdfName = 'po_' + poId + '_' + sentDate + '.pdf';
+  var pdfBlob = buildPoPdfBlob_(poId, sentDate, supplierVal, noteVal, lines, totalQty, totalAmount);
+  pdfBlob.setName(pdfName);
+
   MailApp.sendEmail({
     to: toList.join(','),
     subject: subject,
     body: bodyText,
     htmlBody: html,
+    attachments: [csvBlob, pdfBlob],
   });
 }
 
