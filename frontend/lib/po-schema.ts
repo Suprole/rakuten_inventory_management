@@ -88,6 +88,27 @@ export const PoUpdateStatusResponseSchema = z.union([
   ApiErrorSchema,
 ]);
 
+export const PoDeletePayloadSchema = z.object({
+  po_id: z.string(),
+});
+export const PoDeleteOkSchema = z.object({
+  ok: z.literal(true),
+});
+export const PoDeleteNotFoundSchema = z.object({
+  ok: z.literal(false),
+  error: z.literal('not_found'),
+});
+export const PoDeleteCannotDeleteSentSchema = z.object({
+  ok: z.literal(false),
+  error: z.literal('cannot_delete_sent'),
+});
+export const PoDeleteResponseSchema = z.union([
+  PoDeleteOkSchema,
+  PoDeleteNotFoundSchema,
+  PoDeleteCannotDeleteSentSchema,
+  ApiErrorSchema,
+]);
+
 export type POStatus = z.infer<typeof POStatusSchema>;
 export type POHeader = z.infer<typeof POHeaderSchema>;
 export type POLine = z.infer<typeof POLineSchema>;

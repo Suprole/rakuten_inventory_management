@@ -45,6 +45,11 @@ function handleApi(method, e) {
       if (e && e.postData && e.postData.contents) body2 = JSON.parse(e.postData.contents);
       return jsonResponse(200, poUpdateStatus_(body2.po_id, body2.status));
     }
+    if (method === 'POST' && path === '/po/delete') {
+      var body3 = {};
+      if (e && e.postData && e.postData.contents) body3 = JSON.parse(e.postData.contents);
+      return jsonResponse(200, poDelete_(body3.po_id));
+    }
 
     return jsonResponse(404, { ok: false, error: 'not_found', path: path, method: method });
   } catch (err) {

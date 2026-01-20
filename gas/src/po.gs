@@ -58,6 +58,27 @@ function updateRowWhere_(sheetName, keyColName, keyValue, updates) {
   return false;
 }
 
+function deleteRowsWhere_(sheetName, keyColName, keyValue) {
+  var t = readTable_(sheetName);
+  var sheet = t.sheet;
+  requireCols(t.header, [keyColName], sheetName);
+  var keyIdx = t.header[keyColName];
+
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) return 0;
+
+  // deleteRow は行番号が詰まるため、下から消す
+  var toDelete = [];
+  for (var r = 1; r < values.length; r++) {
+    if (toStringSafe(values[r][keyIdx]) !== toStringSafe(keyValue)) continue;
+    toDelete.push(r + 1); // 1-based sheet row
+  }
+  for (var i = toDelete.length - 1; i >= 0; i--) {
+    sheet.deleteRow(toDelete[i]);
+  }
+  return toDelete.length;
+}
+
 function generatePoId_() {
   // PO-YYYYMMDD-001
   var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd');
@@ -212,3 +233,32 @@ function poUpdateStatus_(poId, status) {
   return { ok: true };
 }
 
+function poDelete_(poId) {
+  if (!poId) throw new Error('po_id is required');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30 * 1000);
+  try {
+    // statusチェック（sentは事故防止で削除不可）
+    var headerT = readTable_('po_header');
+    requireCols(headerT.header, ['po_id', 'status'], 'po_header');
+    var status = null;
+    for (var i = 0; i < headerT.rows.length; i++) {
+      var r = headerT.rows[i];
+      if (toStringSafe(r[headerT.header['po_id']]) === toStringSafe(poId)) {
+        status = toStringSafe(r[headerT.header['status']]);
+        break;
+      }
+    }
+    if (status === null) return { ok: false, error: 'not_found' };
+    if (status === 'sent') return { ok: false, error: 'cannot_delete_sent' };
+
+    // lines → header の順で削除
+    deleteRowsWhere_('po_lines', 'po_id', poId);
+    var deletedHeader = deleteRowsWhere_('po_header', 'po_id', poId);
+    if (deletedHeader === 0) return { ok: false, error: 'not_found' };
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}

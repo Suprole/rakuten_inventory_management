@@ -1,6 +1,8 @@
 import {
   PoCreatePayloadSchema,
   PoCreateResponseSchema,
+  PoDeletePayloadSchema,
+  PoDeleteResponseSchema,
   PoDetailResponseSchema,
   PoListResponseSchema,
   PoUpdateStatusPayloadSchema,
@@ -93,3 +95,24 @@ export async function updatePoStatus(payload: { po_id: string; status: 'draft' |
   return parsed.data;
 }
 
+export async function deletePo(payload: { po_id: string }) {
+  const input = PoDeletePayloadSchema.safeParse(payload);
+  if (!input.success) throw new Error(`削除リクエストが不正です: ${input.error.message}`);
+
+  const res = await fetch('/api/po/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input.data),
+  });
+  const json = await parseJson(res);
+  if (!res.ok) {
+    console.error('[po-client] /api/po/delete http_error', { status: res.status, json });
+  }
+  const parsed = PoDeleteResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    console.error('[po-client] /api/po/delete schema_error', { error: parsed.error.message, json });
+    throw new Error(`PO削除の形式が不正です: ${parsed.error.message}`);
+  }
+  if (!parsed.data.ok) throw new Error(parsed.data.message || parsed.data.error);
+  return parsed.data;
+}

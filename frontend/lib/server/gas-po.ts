@@ -55,7 +55,7 @@ async function gasFetch<T>(params: {
   return json as T;
 }
 
-import { PoDetailResponseSchema, PoListResponseSchema, PoCreatePayloadSchema, PoCreateResponseSchema, PoUpdateStatusPayloadSchema, PoUpdateStatusResponseSchema } from '@/lib/po-schema';
+import { PoDetailResponseSchema, PoListResponseSchema, PoCreatePayloadSchema, PoCreateResponseSchema, PoUpdateStatusPayloadSchema, PoUpdateStatusResponseSchema, PoDeletePayloadSchema, PoDeleteResponseSchema } from '@/lib/po-schema';
 
 export async function poList(): Promise<unknown> {
   const json = await gasFetch<unknown>({ path: '/po/list', method: 'GET' });
@@ -99,3 +99,11 @@ export async function poUpdateStatus(payload: { po_id: string; status: 'draft' |
   return parsed.data;
 }
 
+export async function poDelete(payload: { po_id: string }): Promise<unknown> {
+  const input = PoDeletePayloadSchema.safeParse(payload);
+  if (!input.success) throw new Error(`po/delete の入力が不正です: ${input.error.message}`);
+  const json = await gasFetch<unknown>({ path: '/po/delete', method: 'POST', body: input.data });
+  const parsed = PoDeleteResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error(`GAS po/delete の形式が不正です: ${parsed.error.message}`);
+  return parsed.data;
+}
