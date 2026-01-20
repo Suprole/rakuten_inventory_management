@@ -72,6 +72,8 @@ type RiskFilter = 'all' | 'red' | 'yellow' | 'green';
 type BrowseMode = 'search' | 'all';
 type DisplayMode = 'flat' | 'grouped';
 
+const PAGE_SIZE = 10;
+
 export default function PONewPage() {
   const router = useRouter();
   const itemMetricsState = useItemMetrics();
@@ -88,6 +90,12 @@ export default function PONewPage() {
   const [browseMode, setBrowseMode] = useState<BrowseMode>('search');
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('flat');
+  const [page, setPage] = useState(1);
+  const [pageByRisk, setPageByRisk] = useState<Record<'red' | 'yellow' | 'green', number>>({
+    red: 1,
+    yellow: 1,
+    green: 1,
+  });
 
   const candidateItems = useMemo(() => {
     const base =
@@ -106,6 +114,11 @@ export default function PONewPage() {
       riskFilter === 'all' ? base : base.filter((i) => i.risk_level === riskFilter);
     return filtered;
   }, [browseMode, itemMetrics, riskFilter, searchQuery]);
+
+  const resetPagination = () => {
+    setPage(1);
+    setPageByRisk({ red: 1, yellow: 1, green: 1 });
+  };
 
   const formatDays = (v: number | null | undefined) => {
     if (v === null || v === undefined || Number.isNaN(v)) return '-';
@@ -248,6 +261,49 @@ export default function PONewPage() {
     return buckets;
   }, [candidateItems]);
 
+  const totalPages = Math.max(1, Math.ceil(candidateItems.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pagedItems = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return candidateItems.slice(start, start + PAGE_SIZE);
+  }, [candidateItems, safePage]);
+
+  const renderPager = (p: number, total: number, onChange: (next: number) => void, totalItems: number) => {
+    if (totalItems <= PAGE_SIZE) return null;
+    const start = (p - 1) * PAGE_SIZE + 1;
+    const end = Math.min(p * PAGE_SIZE, totalItems);
+    return (
+      <div className="flex items-center justify-between gap-3 px-2 pt-3 text-sm text-muted-foreground">
+        <span>
+          {start}-{end} / {totalItems}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-transparent"
+            disabled={p <= 1}
+            onClick={() => onChange(p - 1)}
+          >
+            前へ
+          </Button>
+          <span className="text-xs">
+            {p}/{total}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-transparent"
+            disabled={p >= total}
+            onClick={() => onChange(p + 1)}
+          >
+            次へ
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -264,7 +320,7 @@ export default function PONewPage() {
             新規発注作成
           </h1>
           <p className="mt-2 text-muted-foreground">
-            発注推奨商品から選択、または検索から任意の商品を追加できます
+            検索から任意の商品を追加し、数量・単価を調整してドラフトを作成します
           </p>
         </div>
 
@@ -290,7 +346,10 @@ export default function PONewPage() {
                       <Input
                         placeholder="社内ID または 商品名で検索..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          resetPagination();
+                        }}
                         className="pl-10"
                         disabled={browseMode === 'all'}
                       />
@@ -298,7 +357,10 @@ export default function PONewPage() {
                     <div className="mt-2 flex items-center gap-3">
                       <Checkbox
                         checked={browseMode === 'all'}
-                        onCheckedChange={(v) => setBrowseMode(v ? 'all' : 'search')}
+                        onCheckedChange={(v) => {
+                          setBrowseMode(v ? 'all' : 'search');
+                          resetPagination();
+                        }}
                         id="browse-all"
                       />
                       <Label htmlFor="browse-all" className="text-sm text-muted-foreground cursor-pointer">
@@ -309,7 +371,13 @@ export default function PONewPage() {
                   <div className="grid gap-3">
                     <div>
                       <Label className="text-sm">リスク</Label>
-                      <Select value={riskFilter} onValueChange={(v) => setRiskFilter(v as RiskFilter)}>
+                      <Select
+                        value={riskFilter}
+                        onValueChange={(v) => {
+                          setRiskFilter(v as RiskFilter);
+                          resetPagination();
+                        }}
+                      >
                         <SelectTrigger className="mt-1">
                           <SelectValue placeholder="リスク" />
                         </SelectTrigger>
@@ -323,7 +391,13 @@ export default function PONewPage() {
                     </div>
                     <div>
                       <Label className="text-sm">表示</Label>
-                      <Select value={displayMode} onValueChange={(v) => setDisplayMode(v as DisplayMode)}>
+                      <Select
+                        value={displayMode}
+                        onValueChange={(v) => {
+                          setDisplayMode(v as DisplayMode);
+                          resetPagination();
+                        }}
+                      >
                         <SelectTrigger className="mt-1">
                           <SelectValue placeholder="表示" />
                         </SelectTrigger>
@@ -351,6 +425,10 @@ export default function PONewPage() {
                     {(['red', 'yellow', 'green'] as const).map((risk) => {
                       const list = groupedByRisk[risk];
                       if (riskFilter !== 'all' && riskFilter !== risk) return null;
+                      const tp = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+                      const cp = Math.min(Math.max(1, pageByRisk[risk] || 1), tp);
+                      const start = (cp - 1) * PAGE_SIZE;
+                      const pageList = list.slice(start, start + PAGE_SIZE);
                       return (
                         <Card key={risk} className="border-border">
                           <CardHeader className="py-3">
@@ -376,7 +454,7 @@ export default function PONewPage() {
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
-                                    {list.map((item) => (
+                                    {pageList.map((item) => (
                                       <TableRow
                                         key={item.internal_id}
                                         className={cn(selectedItems.has(item.internal_id) && 'bg-primary/5')}
@@ -432,6 +510,7 @@ export default function PONewPage() {
                                     ))}
                                   </TableBody>
                                 </Table>
+                                {renderPager(cp, tp, (next) => setPageByRisk((prev) => ({ ...prev, [risk]: next })), list.length)}
                               </div>
                             )}
                           </CardContent>
@@ -454,7 +533,7 @@ export default function PONewPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {candidateItems.map((item) => (
+                        {pagedItems.map((item) => (
                           <TableRow
                             key={item.internal_id}
                             className={cn(selectedItems.has(item.internal_id) && 'bg-primary/5')}
@@ -514,6 +593,7 @@ export default function PONewPage() {
                     <p className="text-sm text-muted-foreground mt-2 px-2">
                       {candidateItems.length}件の商品が見つかりました
                     </p>
+                    {renderPager(safePage, totalPages, setPage, candidateItems.length)}
                   </div>
                 )}
               </CardContent>
