@@ -34,7 +34,7 @@ export default withAuth({
 export const config = {
   matcher: [
     // pages + API（auth系/静的ファイル/サインイン画面は除外）
-    '/((?!api/auth|auth/signin|_next/static|_next/image|favicon.ico|icon|apple-icon).*)',
+    '/((?!api/auth|auth/signin|_next/static|_next/image|favicon.ico|icon|apple-icon|_vercel).*)',
   ],
 };
 
