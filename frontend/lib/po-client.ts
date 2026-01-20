@@ -21,8 +21,14 @@ async function parseJson(res: Response): Promise<unknown> {
 export async function fetchPoList() {
   const res = await fetch('/api/po/list', { cache: 'no-store' });
   const json = await parseJson(res);
+  if (!res.ok) {
+    console.error('[po-client] /api/po/list http_error', { status: res.status, json });
+  }
   const parsed = PoListResponseSchema.safeParse(json);
-  if (!parsed.success) throw new Error(`PO一覧の形式が不正です: ${parsed.error.message}`);
+  if (!parsed.success) {
+    console.error('[po-client] /api/po/list schema_error', { error: parsed.error.message, json });
+    throw new Error(`PO一覧の形式が不正です: ${parsed.error.message}`);
+  }
   if (!parsed.data.ok) throw new Error(parsed.data.message || parsed.data.error);
   return parsed.data.items;
 }
@@ -30,8 +36,14 @@ export async function fetchPoList() {
 export async function fetchPoDetail(poId: string) {
   const res = await fetch(`/api/po/detail?po_id=${encodeURIComponent(poId)}`, { cache: 'no-store' });
   const json = await parseJson(res);
+  if (!res.ok) {
+    console.error('[po-client] /api/po/detail http_error', { status: res.status, poId, json });
+  }
   const parsed = PoDetailResponseSchema.safeParse(json);
-  if (!parsed.success) throw new Error(`PO詳細の形式が不正です: ${parsed.error.message}`);
+  if (!parsed.success) {
+    console.error('[po-client] /api/po/detail schema_error', { error: parsed.error.message, poId, json });
+    throw new Error(`PO詳細の形式が不正です: ${parsed.error.message}`);
+  }
   return parsed.data;
 }
 
@@ -45,8 +57,14 @@ export async function createPo(payload: PoCreatePayload) {
     body: JSON.stringify(input.data),
   });
   const json = await parseJson(res);
+  if (!res.ok) {
+    console.error('[po-client] /api/po/create http_error', { status: res.status, json });
+  }
   const parsed = PoCreateResponseSchema.safeParse(json);
-  if (!parsed.success) throw new Error(`PO作成の形式が不正です: ${parsed.error.message}`);
+  if (!parsed.success) {
+    console.error('[po-client] /api/po/create schema_error', { error: parsed.error.message, json });
+    throw new Error(`PO作成の形式が不正です: ${parsed.error.message}`);
+  }
   if (!parsed.data.ok) throw new Error(parsed.data.message || parsed.data.error);
   return parsed.data.po_id;
 }
@@ -61,8 +79,14 @@ export async function updatePoStatus(payload: { po_id: string; status: 'draft' |
     body: JSON.stringify(input.data),
   });
   const json = await parseJson(res);
+  if (!res.ok) {
+    console.error('[po-client] /api/po/update-status http_error', { status: res.status, json });
+  }
   const parsed = PoUpdateStatusResponseSchema.safeParse(json);
-  if (!parsed.success) throw new Error(`ステータス更新の形式が不正です: ${parsed.error.message}`);
+  if (!parsed.success) {
+    console.error('[po-client] /api/po/update-status schema_error', { error: parsed.error.message, json });
+    throw new Error(`ステータス更新の形式が不正です: ${parsed.error.message}`);
+  }
   return parsed.data;
 }
 

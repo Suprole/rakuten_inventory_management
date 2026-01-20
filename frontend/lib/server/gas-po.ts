@@ -11,8 +11,10 @@ async function gasFetch<T>(params: {
   method: 'GET' | 'POST';
   query?: Record<string, string>;
   body?: unknown;
+  requestId?: string;
 }): Promise<T> {
   const { baseUrl, apiKey } = getGasConfig();
+  const requestId = params.requestId || crypto.randomUUID();
   const url = new URL(baseUrl);
   url.searchParams.set('path', params.path);
   url.searchParams.set('api_key', apiKey); // GAS側制約のため暫定（ブラウザに露出しない）
@@ -21,6 +23,16 @@ async function gasFetch<T>(params: {
       url.searchParams.set(k, v);
     }
   }
+
+  // NOTE: api_key等はログに出さない（origin+pathnameだけ）
+  const safeUrl = (() => {
+    try {
+      const u = new URL(baseUrl);
+      return `${u.origin}${u.pathname}`;
+    } catch {
+      return '(invalid GAS_WEBAPP_URL)';
+    }
+  })();
 
   const res = await fetch(url.toString(), {
     method: params.method,
@@ -33,9 +45,11 @@ async function gasFetch<T>(params: {
   try {
     json = text ? (JSON.parse(text) as unknown) : ({} as unknown);
   } catch {
+    console.error('[gas-po] non-json response', { requestId, path: params.path, method: params.method, safeUrl, status: res.status });
     throw new Error(`GASの応答がJSONではありません: ${text.slice(0, 200)}`);
   }
   if (!res.ok) {
+    console.error('[gas-po] upstream error', { requestId, path: params.path, method: params.method, safeUrl, status: res.status, statusText: res.statusText });
     throw new Error(`GAS API失敗: ${res.status} ${res.statusText} ${text.slice(0, 200)}`);
   }
   return json as T;
