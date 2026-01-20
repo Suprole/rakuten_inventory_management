@@ -347,7 +347,7 @@ function sendPoEmailOnSent_(poId) {
         '<thead>' +
           '<tr style="background:#f5f5f5;">' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:left;">発注ID</th>' +
-            '<th style="border:1px solid #ddd;padding:6px;text-align:left;">社内ID</th>' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:left;">商品コード</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">数量(個)</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">単価</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">合計額</th>' +

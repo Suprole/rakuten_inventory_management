@@ -34,3 +34,22 @@ function runDailyEtl() {
   );
 }
 
+/**
+ * Mail送信権限の承認を発火させるための手動実行用関数。
+ * Apps Scriptエディタから1回実行して承認してください（テストメールが1通送られます）。
+ */
+function authorizeMail() {
+  var to = '';
+  try {
+    to = Session.getEffectiveUser().getEmail();
+  } catch (e) {
+    to = '';
+  }
+  if (!to) throw new Error('送信先メール（Session.getEffectiveUser().getEmail()）が取得できません。手動で to を指定してください。');
+  MailApp.sendEmail({
+    to: to,
+    subject: '[rakuten-inventory] mail scope authorize test',
+    body: 'これはメール送信権限（script.send_mail）の承認テストです。不要なら削除してください。',
+  });
+  return { ok: true, to: to };
+}
