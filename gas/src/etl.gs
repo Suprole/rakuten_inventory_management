@@ -165,6 +165,18 @@ function runEtlOnce() {
   // 6) internal集計（metro固定、二重計上しない）
   var derivedStock = {};
   var avgCons = {};
+  var bomByInternal = {};
+
+  // BOMを internal_id → listing で逆引きできるようにしておく（詳細画面のSKU別表示に利用）
+  for (var listingIdForBom in bomByListing) {
+    var rowsForListing = bomByListing[listingIdForBom];
+    if (!rowsForListing) continue;
+    for (var bidx = 0; bidx < rowsForListing.length; bidx++) {
+      var br = rowsForListing[bidx];
+      if (!bomByInternal[br.internal_id]) bomByInternal[br.internal_id] = [];
+      bomByInternal[br.internal_id].push({ listing_id: br.listing_id, qty: br.qty });
+    }
+  }
 
   for (var listingStockId in metroData.stockByListing) {
     var stock_qty = metroData.stockByListing[listingStockId] || 0;
@@ -211,6 +223,36 @@ function runEtlOnce() {
     var need = cons * target + safety - stock;
     var reorder = ceilToLot(Math.max(need, 0), lot);
 
+    // 詳細画面用：SKU別（先月/今月）を item_metrics に埋め込む（metro固定）
+    // NOTE: 本システムは計算基準店舗を metro とするため、内訳も metro の listing のみを出す
+    var listings = [];
+    var bomRefs = bomByInternal[internal_id] || [];
+    for (var bi = 0; bi < bomRefs.length; bi++) {
+      var ref = bomRefs[bi];
+      if (String(ref.listing_id).indexOf('metro|') !== 0) continue;
+      var lm = listingsMap[ref.listing_id];
+      if (!lm || !lm.active) continue;
+
+      var stockQty = metroData.stockByListing[ref.listing_id] || 0;
+      var sales = metroData.salesByListing[ref.listing_id] || { LM: 0, CM: 0 };
+      var rHat = rHatByListing[ref.listing_id] || 0;
+
+      listings.push({
+        listing_id: ref.listing_id,
+        store_id: 'metro',
+        rakuten_item_no: lm.rakuten_item_no,
+        rakuten_sku: lm.rakuten_sku,
+        title: lm.title || '',
+        stock_qty: stockQty,
+        last_month_sales: sales.LM || 0,
+        this_month_sales: sales.CM || 0,
+        r_hat: rHat,
+        bom_qty: ref.qty,
+        contribution_stock: stockQty * ref.qty,
+        contribution_consumption: rHat * ref.qty,
+      });
+    }
+
     itemMetrics.push({
       internal_id: internal_id,
       name: item.name,
@@ -225,6 +267,7 @@ function runEtlOnce() {
       reorder_qty_suggested: reorder,
       risk_level: risk,
       default_unit_cost: item.default_unit_cost,
+      listings: listings,
     });
   }
 
