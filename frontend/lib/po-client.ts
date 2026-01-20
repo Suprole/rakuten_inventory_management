@@ -113,6 +113,9 @@ export async function deletePo(payload: { po_id: string }) {
     console.error('[po-client] /api/po/delete schema_error', { error: parsed.error.message, json });
     throw new Error(`PO削除の形式が不正です: ${parsed.error.message}`);
   }
-  if (!parsed.data.ok) throw new Error(parsed.data.message || parsed.data.error);
+  if (!parsed.data.ok) {
+    const msg = 'message' in parsed.data ? parsed.data.message : undefined;
+    throw new Error(msg || parsed.data.error);
+  }
   return parsed.data;
 }
