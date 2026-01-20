@@ -16,6 +16,8 @@ GASの「プロジェクトのプロパティ（スクリプトプロパティ�
 - `GCS_SERVICE_ACCOUNT_JSON`: サービスアカウントキーJSON（文字列）
   - `client_email` と `private_key` を含むもの
 - `API_KEY`: PO API用（Next.jsサーバーから呼び出す）
+- `PO_EMAIL_RECIPIENTS`: 発注送信（status=sent）時の通知先メールアドレス（カンマ区切りで複数可）
+  - 例: `foo@example.com,bar@example.com`
 
 ## 整合性チェック（事故防止）
 

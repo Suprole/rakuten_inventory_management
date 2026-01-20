@@ -228,9 +228,158 @@ function poDetail_(poId) {
 
 function poUpdateStatus_(poId, status) {
   if (status !== 'draft' && status !== 'sent' && status !== 'cancelled') throw new Error('invalid status');
-  var ok = updateRowWhere_('po_header', 'po_id', poId, { status: status });
-  if (!ok) return { ok: false, error: 'not_found' };
-  return { ok: true };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30 * 1000);
+  try {
+    // 現在ステータスを取得（sent→sent などの再送を防ぐ）
+    var headerT = readTable_('po_header');
+    requireCols(headerT.header, ['po_id', 'status', 'supplier', 'note', 'created_at'], 'po_header');
+    var currentStatus = null;
+    var headerRow = null;
+    for (var i = 0; i < headerT.rows.length; i++) {
+      var r = headerT.rows[i];
+      if (toStringSafe(r[headerT.header['po_id']]) === toStringSafe(poId)) {
+        currentStatus = toStringSafe(r[headerT.header['status']]);
+        headerRow = r;
+        break;
+      }
+    }
+    if (currentStatus === null) return { ok: false, error: 'not_found' };
+
+    var ok = updateRowWhere_('po_header', 'po_id', poId, { status: status });
+    if (!ok) return { ok: false, error: 'not_found' };
+
+    // draft/cancelled → sent のときだけメール送信
+    if (status === 'sent' && currentStatus !== 'sent') {
+      try {
+        sendPoEmailOnSent_(poId);
+      } catch (mailErr) {
+        // 発注ステータス更新は成功させるが、メール送信失敗はログに残す
+        var msg = mailErr && mailErr.message ? mailErr.message : String(mailErr);
+        Logger.log('[poUpdateStatus_] mail failed: ' + msg);
+        return { ok: true, mail_sent: false, mail_error: msg };
+      }
+      return { ok: true, mail_sent: true };
+    }
+
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getPoEmailRecipients_() {
+  var raw = PropertiesService.getScriptProperties().getProperty('PO_EMAIL_RECIPIENTS') || '';
+  var parts = raw.split(/[,;\s]+/);
+  var out = [];
+  for (var i = 0; i < parts.length; i++) {
+    var s = String(parts[i] || '').trim();
+    if (!s) continue;
+    out.push(s);
+  }
+  return out;
+}
+
+function escapeHtml_(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function yen_(n) {
+  var x = Number(n || 0);
+  if (isNaN(x)) x = 0;
+  return '¥' + Math.round(x).toLocaleString();
+}
+
+function sendPoEmailOnSent_(poId) {
+  var toList = getPoEmailRecipients_();
+  if (!toList.length) {
+    Logger.log('[sendPoEmailOnSent_] PO_EMAIL_RECIPIENTS is empty; skip');
+    return;
+  }
+
+  // 既存の詳細取得を再利用（事故を避ける）
+  var detail = poDetail_(poId);
+  if (!detail || !detail.ok) throw new Error('po not found for email: ' + poId);
+  var header = detail.header || {};
+  var lines = detail.lines || [];
+
+  var sentDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  var subject = '【発注依頼】楽天用 - ' + sentDate + ' (' + lines.length + '件)';
+
+  var supplierVal = toStringSafe(header.supplier);
+  var noteVal = toStringSafe(header.note);
+
+  var totalQty = 0;
+  var totalAmount = 0;
+  var rowsHtml = '';
+  for (var k = 0; k < lines.length; k++) {
+    var ln = lines[k];
+    var qty = Number(ln.qty || 0);
+    var unitCost = ln.unit_cost !== undefined ? Number(ln.unit_cost) : 0;
+    var amt = qty * unitCost;
+    totalQty += qty;
+    totalAmount += amt;
+    rowsHtml +=
+      '<tr>' +
+        '<td style="border:1px solid #ddd;padding:6px;white-space:nowrap;">' + escapeHtml_(poId) + '</td>' +
+        '<td style="border:1px solid #ddd;padding:6px;white-space:nowrap;">' + escapeHtml_(ln.internal_id) + '</td>' +
+        '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(String(qty)) + '</td>' +
+        '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(unitCost)) + '</td>' +
+        '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(amt)) + '</td>' +
+      '</tr>';
+  }
+
+  var html =
+    '<div style="font-family:Arial,Helvetica,sans-serif;">' +
+      '<h2 style="margin:0 0 8px 0;">発注依頼</h2>' +
+      '<p style="margin:0 0 12px 0;">以下の内容で発注をお願いします。</p>' +
+      '<div style="margin:0 0 12px 0;font-size:13px;color:#333;">' +
+        '<div><b>発注ID:</b> ' + escapeHtml_(poId) + '</div>' +
+        '<div><b>発注日:</b> ' + escapeHtml_(sentDate) + '</div>' +
+        (supplierVal ? '<div><b>サプライヤー:</b> ' + escapeHtml_(supplierVal) + '</div>' : '') +
+        (noteVal ? '<div><b>備考:</b> ' + escapeHtml_(noteVal) + '</div>' : '') +
+      '</div>' +
+      '<table style="border-collapse:collapse;width:100%;font-size:13px;">' +
+        '<thead>' +
+          '<tr style="background:#f5f5f5;">' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:left;">発注ID</th>' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:left;">社内ID</th>' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:right;">数量(個)</th>' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:right;">単価</th>' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:right;">合計額</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+      '<div style="margin-top:12px;font-size:13px;">' +
+        '<div><b>発注件数:</b> ' + escapeHtml_(String(lines.length)) + '件</div>' +
+        '<div><b>合計数量:</b> ' + escapeHtml_(String(totalQty)) + '個</div>' +
+        '<div><b>合計発注額:</b> ' + escapeHtml_(yen_(totalAmount)) + '</div>' +
+      '</div>' +
+    '</div>';
+
+  var bodyText =
+    '発注依頼\n' +
+    '発注ID: ' + poId + '\n' +
+    '発注日: ' + sentDate + '\n' +
+    (supplierVal ? 'サプライヤー: ' + supplierVal + '\n' : '') +
+    (noteVal ? '備考: ' + noteVal + '\n' : '') +
+    '\n' +
+    '件数: ' + lines.length + '\n' +
+    '合計数量: ' + totalQty + '\n' +
+    '合計発注額: ' + Math.round(totalAmount) + '\n';
+
+  MailApp.sendEmail({
+    to: toList.join(','),
+    subject: subject,
+    body: bodyText,
+    htmlBody: html,
+  });
 }
 
 function poDelete_(poId) {
