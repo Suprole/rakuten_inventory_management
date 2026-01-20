@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/table';
 import { Search, ArrowUpDown, Package } from 'lucide-react';
 import { type ItemMetric } from '@/lib/view-schema';
-import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -286,15 +285,12 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="text-right font-semibold">
-                        操作
-                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {itemMetricsState.status === 'loading' ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center">
+                        <TableCell colSpan={7} className="h-24 text-center">
                           <p className="text-muted-foreground">読み込み中...</p>
                         </TableCell>
                       </TableRow>
@@ -303,6 +299,15 @@ export default function ItemsPage() {
                         <TableRow
                           key={item.internal_id}
                           className="cursor-pointer hover:bg-accent/50"
+                          role="link"
+                          tabIndex={0}
+                          onClick={() => router.push(`/items/${item.internal_id}`)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              router.push(`/items/${item.internal_id}`);
+                            }
+                          }}
                         >
                           <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
                           <TableCell className="font-mono text-sm">
@@ -336,18 +341,11 @@ export default function ItemsPage() {
                               <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Link href={`/items/${item.internal_id}`}>
-                              <Button variant="ghost" size="sm">
-                                詳細
-                              </Button>
-                            </Link>
-                          </TableCell>
                         </TableRow>
                       ))
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center">
+                        <TableCell colSpan={7} className="h-24 text-center">
                           <p className="text-muted-foreground">
                             該当する商品が見つかりませんでした
                           </p>
@@ -358,6 +356,15 @@ export default function ItemsPage() {
                         <TableRow
                           key={item.internal_id}
                           className="cursor-pointer hover:bg-accent/50"
+                          role="link"
+                          tabIndex={0}
+                          onClick={() => router.push(`/items/${item.internal_id}`)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              router.push(`/items/${item.internal_id}`);
+                            }
+                          }}
                         >
                           <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
                           <TableCell className="font-mono text-sm">
@@ -390,13 +397,6 @@ export default function ItemsPage() {
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Link href={`/items/${item.internal_id}`}>
-                              <Button variant="ghost" size="sm">
-                                詳細
-                              </Button>
-                            </Link>
                           </TableCell>
                         </TableRow>
                       ))

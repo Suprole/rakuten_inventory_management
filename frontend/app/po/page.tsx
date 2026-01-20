@@ -17,8 +17,10 @@ import { ShoppingCart, Plus, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { usePoList } from '@/lib/use-po';
+import { useRouter } from 'next/navigation';
 
 export default function POListPage() {
+  const router = useRouter();
   const poListState = usePoList();
   const items = useMemo(() => poListState.data ?? [], [poListState.data]);
 
@@ -146,21 +148,18 @@ export default function POListPage() {
                       合計数量
                     </TableHead>
                     <TableHead className="font-semibold">備考</TableHead>
-                    <TableHead className="text-right font-semibold">
-                      操作
-                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {poListState.status === 'loading' && items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <p className="text-muted-foreground">読み込み中...</p>
                       </TableCell>
                     </TableRow>
                   ) : poListState.status === 'error' && items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <div className="space-y-2">
                           <p className="text-destructive">読み込みに失敗しました: {poListState.error}</p>
                           <Button variant="outline" size="sm" onClick={poListState.refresh} className="bg-transparent">
@@ -171,7 +170,7 @@ export default function POListPage() {
                     </TableRow>
                   ) : items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <p className="text-muted-foreground">
                           発注データがありません
                         </p>
@@ -182,6 +181,15 @@ export default function POListPage() {
                       <TableRow
                         key={po.po_id}
                         className="cursor-pointer hover:bg-accent/50"
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => router.push(`/po/${po.po_id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            router.push(`/po/${po.po_id}`);
+                          }
+                        }}
                       >
                         <TableCell className="font-mono text-sm font-medium">
                           {po.po_id}
@@ -205,13 +213,6 @@ export default function POListPage() {
                           {po.note || (
                             <span className="text-muted-foreground">-</span>
                           )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Link href={`/po/${po.po_id}`}>
-                            <Button variant="ghost" size="sm">
-                              詳細
-                            </Button>
-                          </Link>
                         </TableCell>
                       </TableRow>
                     ))
