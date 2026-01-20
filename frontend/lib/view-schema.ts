@@ -1,0 +1,51 @@
+import { z } from 'zod';
+
+export const RiskLevelSchema = z.enum(['red', 'yellow', 'green']);
+
+export const ListingMetricSchema = z.object({
+  listing_id: z.string(),
+  store_id: z.enum(['metro', 'windy']),
+  rakuten_item_no: z.string(),
+  rakuten_sku: z.string(),
+  title: z.string(),
+  stock_qty: z.number(),
+  last_month_sales: z.number(),
+  this_month_sales: z.number(),
+  r_hat: z.number(),
+  bom_qty: z.number(),
+  contribution_stock: z.number(),
+  contribution_consumption: z.number(),
+});
+
+export const ItemMetricSchema = z.object({
+  internal_id: z.string(),
+  name: z.string(),
+  derived_stock: z.number(),
+  avg_daily_consumption: z.number(),
+  days_of_cover: z.number().nullable(), // ETL側で∞はnull等に正規化して出す前提
+  lead_time_days: z.number(),
+  safety_stock: z.number(),
+  lot_size: z.number(),
+  target_cover_days: z.number(),
+  need_qty: z.number(),
+  reorder_qty_suggested: z.number(),
+  risk_level: RiskLevelSchema,
+  default_unit_cost: z.number().optional(),
+  listings: z.array(ListingMetricSchema).optional(), // 任意（listing内訳を出す場合）
+});
+
+export const ItemMetricsSchema = z.array(ItemMetricSchema);
+
+export const MirrorMismatchSchema = z.object({
+  rakuten_item_no: z.string(),
+  rakuten_sku: z.string(),
+  metro_stock_qty: z.number(),
+  windy_stock_qty: z.number(),
+  diff: z.number(),
+});
+
+export const MirrorMismatchesSchema = z.array(MirrorMismatchSchema);
+
+export type ItemMetric = z.infer<typeof ItemMetricSchema>;
+export type MirrorMismatch = z.infer<typeof MirrorMismatchSchema>;
+
