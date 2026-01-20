@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigation } from '@/components/navigation';
 import {
   Card,
@@ -47,7 +47,7 @@ import {
   X,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useItemMetrics } from '@/lib/use-view';
 import type { ItemMetric } from '@/lib/view-schema';
@@ -73,6 +73,7 @@ const PAGE_SIZE = 10;
 
 export default function PONewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const itemMetricsState = useItemMetrics();
   const itemMetrics: ItemMetric[] = useMemo(() => {
     return itemMetricsState.status === 'success' ? itemMetricsState.data : [];
@@ -116,6 +117,18 @@ export default function PONewPage() {
     setPage(1);
     setPageByRisk({ red: 1, yellow: 1, green: 1 });
   };
+
+  // 商品詳細からの遷移: /po/new?query=INTERNAL_ID を検索窓にプリセット
+  useEffect(() => {
+    const q = (searchParams?.get('query') || '').trim();
+    if (!q) return;
+    const t = setTimeout(() => {
+      setBrowseMode('search');
+      setSearchQuery(q);
+      resetPagination();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [searchParams]);
 
   const formatDays = (v: number | null | undefined) => {
     if (v === null || v === undefined || Number.isNaN(v)) return '-';

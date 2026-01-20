@@ -254,7 +254,7 @@ export default function ItemDetailPage() {
                 </div>
               )}
               {item.reorder_qty_suggested > 0 && (
-                <Link href="/po/new" className="block">
+                <Link href={`/po/new?query=${encodeURIComponent(item.internal_id)}`} className="block">
                   <Button className="w-full" size="lg">
                     この商品を発注する
                   </Button>
