@@ -146,7 +146,7 @@ export default function PODetailPage() {
       invalidateRemote('po:list');
       invalidateRemote(`po:detail:${id}`);
       alert('発注を削除しました');
-      router.push('/po');
+      router.replace('/po');
       router.refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
