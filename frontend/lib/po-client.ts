@@ -29,7 +29,10 @@ export async function fetchPoList() {
     console.error('[po-client] /api/po/list schema_error', { error: parsed.error.message, json });
     throw new Error(`PO一覧の形式が不正です: ${parsed.error.message}`);
   }
-  if (!parsed.data.ok) throw new Error(parsed.data.message || parsed.data.error);
+  if (!parsed.data.ok) {
+    console.error('[po-client] /api/po/list api_error', parsed.data);
+    throw new Error(parsed.data.message || parsed.data.error);
+  }
   return parsed.data.items;
 }
 

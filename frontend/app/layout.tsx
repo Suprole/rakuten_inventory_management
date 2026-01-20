@@ -36,11 +36,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const enableAnalytics = process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === '1';
   return (
     <html lang="ja">
       <body className={`${geist.className} ${geistMono.className} font-sans antialiased`}>
         <AuthSessionProvider>{children}</AuthSessionProvider>
-        <Analytics />
+        {enableAnalytics ? <Analytics /> : null}
       </body>
     </html>
   )
