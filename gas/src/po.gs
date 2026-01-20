@@ -251,7 +251,7 @@ function poDelete_(poId) {
       }
     }
     if (status === null) return { ok: false, error: 'not_found' };
-    if (status === 'sent') return { ok: false, error: 'cannot_delete_sent' };
+    // NOTE: sent も含めて削除可能（運用要望）
 
     // lines → header の順で削除
     deleteRowsWhere_('po_lines', 'po_id', poId);

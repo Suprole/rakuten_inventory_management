@@ -402,95 +402,97 @@ export default function PODetailPage() {
               </CardContent>
             </Card>
 
-            {status === 'draft' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>操作</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button className="w-full" size="lg">
-                        <Send className="mr-2 h-4 w-4" />
-                        発注を送信
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>発注を送信しますか？</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          この操作を実行すると、発注が送信済みになります。
-                          送信後はキャンセルできません。
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleSend}>
-                          送信する
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+            <Card>
+              <CardHeader>
+                <CardTitle>操作</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {status === 'draft' && (
+                  <>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button className="w-full" size="lg">
+                          <Send className="mr-2 h-4 w-4" />
+                          発注を送信
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>発注を送信しますか？</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            この操作を実行すると、発注が送信済みになります。
+                            送信後はキャンセルできません。
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleSend}>
+                            送信する
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
 
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" className="w-full bg-transparent" size="lg">
-                        <XCircle className="mr-2 h-4 w-4" />
-                        キャンセル
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>発注をキャンセルしますか？</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          この操作を実行すると、発注がキャンセル済みになります。
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>戻る</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleCancel}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          キャンセルする
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" className="w-full bg-transparent" size="lg">
+                          <XCircle className="mr-2 h-4 w-4" />
+                          キャンセル
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>発注をキャンセルしますか？</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            この操作を実行すると、発注がキャンセル済みになります。
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>戻る</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleCancel}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            キャンセルする
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
 
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full bg-transparent text-destructive hover:text-destructive"
-                        size="lg"
-                        disabled={isDeleting}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full bg-transparent text-destructive hover:text-destructive"
+                      size="lg"
+                      disabled={isDeleting}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      削除
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>発注を削除しますか？</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        この操作は取り消せません。発注（{header?.po_id || id}）を完全に削除します。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>戻る</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        削除
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>発注を削除しますか？</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          この操作は取り消せません。発注（{header?.po_id || id}）を完全に削除します。
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>戻る</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleDelete}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          削除する
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </CardContent>
-              </Card>
-            )}
+                        削除する
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>
