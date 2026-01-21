@@ -249,13 +249,13 @@ export default function ItemsPage() {
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="table-fixed">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="font-semibold">リスク</TableHead>
-                      <TableHead className="font-semibold">社内ID</TableHead>
+                      <TableHead className="w-[84px] font-semibold">リスク</TableHead>
+                      <TableHead className="w-[140px] font-semibold">社内ID</TableHead>
                       <TableHead
-                        className="cursor-pointer font-semibold hover:text-foreground"
+                        className="w-[360px] cursor-pointer font-semibold hover:text-foreground"
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
@@ -264,7 +264,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[120px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('derived_stock')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -272,12 +272,12 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="text-right font-semibold">metro先月</TableHead>
-                      <TableHead className="text-right font-semibold">metro今月</TableHead>
-                      <TableHead className="text-right font-semibold">windy先月</TableHead>
-                      <TableHead className="text-right font-semibold">windy今月</TableHead>
+                      <TableHead className="w-[120px] text-right font-semibold">metro先月</TableHead>
+                      <TableHead className="w-[120px] text-right font-semibold">metro今月</TableHead>
+                      <TableHead className="w-[120px] text-right font-semibold">windy先月</TableHead>
+                      <TableHead className="w-[120px] text-right font-semibold">windy今月</TableHead>
                       <TableHead
-                        className="cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[120px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('days_of_cover')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -286,7 +286,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[120px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('reorder_qty_suggested')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -323,7 +323,9 @@ export default function ItemsPage() {
                             {item.internal_id}
                           </TableCell>
                           <TableCell className="font-medium">
-                            {item.name}
+                            <span title={item.name} className="block max-w-[360px] truncate">
+                              {item.name}
+                            </span>
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             {item.derived_stock.toLocaleString()}
@@ -381,7 +383,9 @@ export default function ItemsPage() {
                             {item.internal_id}
                           </TableCell>
                           <TableCell className="font-medium">
-                            {item.name}
+                            <span title={item.name} className="block max-w-[360px] truncate">
+                              {item.name}
+                            </span>
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             {item.derived_stock.toLocaleString()}
