@@ -373,7 +373,7 @@ function buildPoPdfBlob_(poId, sentDate, supplierVal, noteVal, lines, totalQty, 
       '.right{text-align:right;}' +
       '.summary{margin-top:10px;font-size:12px;}' +
     '</style></head><body>' +
-      '<h1>発注依頼（楽天用）</h1>' +
+      '<h1>発注依頼（楽天・Yahooショップ用）</h1>' +
       '<div class="meta">' +
         '<div><b>発注ID:</b> ' + escapeHtml_(poId) + '</div>' +
         '<div><b>発注日:</b> ' + escapeHtml_(sentDate) + '</div>' +
@@ -414,7 +414,7 @@ function sendPoEmailOnSent_(poId) {
   var lines = detail.lines || [];
 
   var sentDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
-  var subject = '【発注依頼】楽天用 - ' + sentDate + ' (' + lines.length + '件)';
+  var subject = '【発注依頼】楽天・Yahooショップ用 - ' + sentDate + ' (' + lines.length + '件)';
 
   var supplierVal = toStringSafe(header.supplier);
   var noteVal = toStringSafe(header.note);
