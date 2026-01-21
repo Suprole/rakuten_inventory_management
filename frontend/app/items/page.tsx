@@ -255,7 +255,7 @@ export default function ItemsPage() {
                       <TableHead className="w-[84px] font-semibold">リスク</TableHead>
                       <TableHead className="w-[140px] font-semibold">社内ID</TableHead>
                       <TableHead
-                        className="w-[360px] cursor-pointer font-semibold hover:text-foreground"
+                        className="w-[260px] cursor-pointer font-semibold hover:text-foreground"
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
@@ -323,7 +323,7 @@ export default function ItemsPage() {
                             {item.internal_id}
                           </TableCell>
                           <TableCell className="font-medium">
-                            <span title={item.name} className="block max-w-[360px] truncate">
+                            <span title={item.name} className="block max-w-[260px] truncate">
                               {item.name}
                             </span>
                           </TableCell>
@@ -383,7 +383,7 @@ export default function ItemsPage() {
                             {item.internal_id}
                           </TableCell>
                           <TableCell className="font-medium">
-                            <span title={item.name} className="block max-w-[360px] truncate">
+                            <span title={item.name} className="block max-w-[260px] truncate">
                               {item.name}
                             </span>
                           </TableCell>
