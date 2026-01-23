@@ -4,14 +4,16 @@ import Link from 'next/link';
 import { Navigation } from '@/components/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Package, ShoppingCart, AlertTriangle, TrendingUp } from 'lucide-react';
-import { useItemMetrics, useMirrorMismatches } from '@/lib/use-view';
+import { Package, ShoppingCart, AlertTriangle, TrendingUp, AlertCircle } from 'lucide-react';
+import { useItemMetrics, useMirrorMismatches, useUnmappedListings } from '@/lib/use-view';
 
 export default function HomePage() {
   const itemMetricsState = useItemMetrics();
   const mismatchState = useMirrorMismatches();
+  const unmappedState = useUnmappedListings();
   const items = itemMetricsState.data ?? [];
   const mismatches = mismatchState.data ?? [];
+  const unmapped = unmappedState.data ?? [];
 
   const redItems = items.filter((item) => item.risk_level === 'red');
   const yellowItems = items.filter((item) => item.risk_level === 'yellow');
@@ -31,7 +33,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
           <Card className="border-destructive/50 bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -99,6 +101,23 @@ export default function HomePage() {
               </p>
             </CardContent>
           </Card>
+
+          <Card className="border-destructive/50 bg-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                BOM未紐付け
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-destructive">
+                {unmappedState.status === 'loading' ? '-' : unmapped.length}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                計算対象外SKU
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         {itemMetricsState.status === 'error' && (
@@ -116,6 +135,16 @@ export default function HomePage() {
             <div className="flex items-center justify-between gap-3">
               <span>ミラーずれデータ取得に失敗しました: {mismatchState.error}</span>
               <Button variant="outline" size="sm" onClick={mismatchState.refresh} className="bg-transparent">
+                再試行
+              </Button>
+            </div>
+          </div>
+        )}
+        {unmappedState.status === 'error' && (
+          <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="flex items-center justify-between gap-3">
+              <span>BOM未紐付けデータ取得に失敗しました: {unmappedState.error}</span>
+              <Button variant="outline" size="sm" onClick={unmappedState.refresh} className="bg-transparent">
                 再試行
               </Button>
             </div>
@@ -202,6 +231,28 @@ export default function HomePage() {
                 至急確認して修正してください。
               </p>
               <Link href="/monitor/mirror">
+                <Button variant="destructive">詳細を確認</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        {unmappedState.status === 'success' && unmapped.length > 0 && (
+          <Card className="mt-3 border-destructive">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-5 w-5" />
+                BOM未紐付け検知
+              </CardTitle>
+              <CardDescription>
+                BOM（セット構成）に紐づかないSKUが存在します（社内IDの計算対象外）
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-sm text-muted-foreground">
+                {unmapped.length}件のSKUがBOM未紐付けです。`listings`/`bom` を整備してください。
+              </p>
+              <Link href="/monitor/bom-unmapped">
                 <Button variant="destructive">詳細を確認</Button>
               </Link>
             </CardContent>

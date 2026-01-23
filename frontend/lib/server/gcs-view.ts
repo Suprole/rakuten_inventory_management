@@ -33,3 +33,7 @@ export async function getMirrorMismatchJson(): Promise<unknown> {
   return await fetchGcsObject('view/mirror_mismatch.json');
 }
 
+export async function getUnmappedListingsJson(): Promise<unknown> {
+  return await fetchGcsObject('view/unmapped_listings.json');
+}
+

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Package, ShoppingCart, AlertTriangle } from 'lucide-react';
+import { Package, ShoppingCart, AlertTriangle, AlertCircle } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 
@@ -22,6 +22,11 @@ const navItems = [
     title: 'ミラーずれ監視',
     href: '/monitor/mirror',
     icon: AlertTriangle,
+  },
+  {
+    title: 'BOM未紐付け監視',
+    href: '/monitor/bom-unmapped',
+    icon: AlertCircle,
   },
 ];
 

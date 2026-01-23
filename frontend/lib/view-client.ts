@@ -3,6 +3,8 @@ import {
   MirrorMismatchesSchema,
   type ItemMetric,
   type MirrorMismatch,
+  UnmappedListingsSchema,
+  type UnmappedListing,
 } from './view-schema';
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -27,5 +29,11 @@ export async function fetchMirrorMismatches(): Promise<MirrorMismatch[]> {
   const url = `/api/view/mirror-mismatch`;
   const data = await fetchJson(url);
   return MirrorMismatchesSchema.parse(data);
+}
+
+export async function fetchUnmappedListings(): Promise<UnmappedListing[]> {
+  const url = `/api/view/unmapped-listings`;
+  const data = await fetchJson(url);
+  return UnmappedListingsSchema.parse(data);
 }
 

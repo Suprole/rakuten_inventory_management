@@ -51,6 +51,21 @@ export const MirrorMismatchSchema = z.object({
 
 export const MirrorMismatchesSchema = z.array(MirrorMismatchSchema);
 
+export const UnmappedListingSchema = z.object({
+  store_id: z.enum(['metro', 'windy']),
+  listing_id: z.string(),
+  rakuten_item_no: z.string(),
+  rakuten_sku: z.string(),
+  stock_qty: z.number(),
+  last_month_sales: z.number(),
+  this_month_sales: z.number(),
+  // ETL側で取れる場合のみ（現状は空/未出力でもOK）
+  title: z.string().optional(),
+});
+
+export const UnmappedListingsSchema = z.array(UnmappedListingSchema);
+
 export type ItemMetric = z.infer<typeof ItemMetricSchema>;
 export type MirrorMismatch = z.infer<typeof MirrorMismatchSchema>;
+export type UnmappedListing = z.infer<typeof UnmappedListingSchema>;
 

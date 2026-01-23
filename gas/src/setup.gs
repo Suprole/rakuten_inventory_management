@@ -231,6 +231,16 @@ function syncListingsFromRakutenSheets() {
 function syncBomFromListingsSemiAuto() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
+  // SKU番号/社内id の末尾が `-N` のような場合に枝番を落として照合するための正規化
+  function normalizeSkuSuffixKey_(s) {
+    var x = String(s === null || s === undefined ? '' : s).trim();
+    if (!x) return '';
+    // 例: ABC- N のような空白は想定しない（シート上の値は通常連結されている前提）
+    // 末尾が `-` + 英字1文字なら除去（大小文字は問わない）
+    x = x.replace(/-[A-Za-z]$/, '');
+    return x.toLowerCase();
+  }
+
   // items読み込み（internal_idの集合）
   var itemsSheet = ss.getSheetByName('items');
   if (!itemsSheet) throw new Error('items sheet not found');
@@ -240,6 +250,7 @@ function syncBomFromListingsSemiAuto() {
   requireCols(itemsHeader, ['internal_id'], 'items');
 
   var internalIdByLower = {};
+  var internalIdByLowerNoSuffix = {}; // 末尾 `-[A-Z]` を落としたキーでも引けるようにする
   for (var i = 1; i < itemsValues.length; i++) {
     var row = itemsValues[i];
     var internal_id = toStringSafe(row[itemsHeader['internal_id']]);
@@ -247,6 +258,8 @@ function syncBomFromListingsSemiAuto() {
     var key = internal_id.toLowerCase();
     // 重複があっても最初を採用（ログだけ）
     if (!internalIdByLower[key]) internalIdByLower[key] = internal_id;
+    var key2 = normalizeSkuSuffixKey_(internal_id);
+    if (key2 && !internalIdByLowerNoSuffix[key2]) internalIdByLowerNoSuffix[key2] = internal_id;
   }
 
   // listings読み込み
@@ -316,6 +329,11 @@ function syncBomFromListingsSemiAuto() {
     var rakutenItemNo = toStringSafe(rowL[listingsHeader['rakuten_item_no']]); // 商品管理番号
     // まずSKU番号→社内idで照合（大小文字無視の完全一致）
     var matchInternal = rakutenSku ? internalIdByLower[rakutenSku.toLowerCase()] : '';
+    // 追加：SKU番号/社内idが末尾 `-N`（`-[A-Z]`）のような場合、枝番を落として照合
+    if (!matchInternal && rakutenSku) {
+      var skuKey2 = normalizeSkuSuffixKey_(rakutenSku);
+      matchInternal = skuKey2 ? (internalIdByLowerNoSuffix[skuKey2] || '') : '';
+    }
     // SKUで一致しなかったものに対してのみ、商品管理番号→社内idで照合（大小文字無視の完全一致）
     if (!matchInternal && rakutenItemNo) {
       matchInternal = internalIdByLower[rakutenItemNo.toLowerCase()] || '';
