@@ -1,4 +1,4 @@
-import { ListingHandlingUpsertPayloadSchema, ListingHandlingUpsertResponseSchema } from '@/lib/master-schema';
+import { ListingHandlingListResponseSchema, ListingHandlingUpsertPayloadSchema, ListingHandlingUpsertResponseSchema } from '@/lib/master-schema';
 
 function getGasConfig(): { baseUrl: string; apiKey: string } {
   const baseUrl = (process.env.GAS_WEBAPP_URL || '').trim();
@@ -78,6 +78,21 @@ export async function upsertListingHandling(params: {
 
   const parsed = ListingHandlingUpsertResponseSchema.safeParse(json);
   if (!parsed.success) throw new Error(`GAS listing_handling/upsert の形式が不正です: ${parsed.error.message}`);
+  return parsed.data;
+}
+
+export async function listListingHandling(params: {
+  handlingStatus?: 'normal' | 'unavailable';
+  requestId?: string;
+}): Promise<unknown> {
+  const json = await gasFetch<unknown>({
+    path: '/master/listing_handling/list',
+    method: 'GET',
+    query: params.handlingStatus ? { handling_status: params.handlingStatus } : undefined,
+    requestId: params.requestId,
+  });
+  const parsed = ListingHandlingListResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error(`GAS listing_handling/list の形式が不正です: ${parsed.error.message}`);
   return parsed.data;
 }
 

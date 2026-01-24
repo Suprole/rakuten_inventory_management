@@ -89,3 +89,49 @@ function upsertListingHandling_(payload) {
   return { ok: true, listing_id: listing_id, handling_status: handling_status, updated_at: updated_at, updated_by: updated_by };
 }
 
+function listListingHandling_(params) {
+  params = params || {};
+  var statusFilter = toStringSafe(params.handling_status || params.status || '');
+  if (statusFilter && statusFilter !== 'normal' && statusFilter !== 'unavailable') {
+    throw new Error('invalid handling_status filter: ' + statusFilter);
+  }
+
+  var t = readTable_('listing_handling');
+  if (!t || !t.rows) return { ok: true, items: [] };
+  requireCols(t.header, ['listing_id', 'handling_status'], 'listing_handling');
+
+  var out = [];
+  for (var i = 0; i < t.rows.length; i++) {
+    var r = t.rows[i];
+    var lid = toStringSafe(r[t.header['listing_id']]);
+    if (!lid) continue;
+    var st = toStringSafe(r[t.header['handling_status']]) || 'normal';
+    if (st !== 'normal' && st !== 'unavailable') st = 'normal';
+    if (statusFilter && st !== statusFilter) continue;
+
+    out.push({
+      listing_id: lid,
+      store_id: t.header['store_id'] !== undefined ? toStringSafe(r[t.header['store_id']]) : '',
+      rakuten_item_no: t.header['rakuten_item_no'] !== undefined ? toStringSafe(r[t.header['rakuten_item_no']]) : '',
+      rakuten_sku: t.header['rakuten_sku'] !== undefined ? toStringSafe(r[t.header['rakuten_sku']]) : '',
+      handling_status: st,
+      note: t.header['note'] !== undefined ? toStringSafe(r[t.header['note']]) : '',
+      updated_at: t.header['updated_at'] !== undefined ? toStringSafe(r[t.header['updated_at']]) : '',
+      updated_by: t.header['updated_by'] !== undefined ? toStringSafe(r[t.header['updated_by']]) : '',
+    });
+  }
+
+  // updated_at desc（空は最後）
+  out.sort(function (a, b) {
+    var aa = a.updated_at || '';
+    var bb = b.updated_at || '';
+    if (!aa && bb) return 1;
+    if (aa && !bb) return -1;
+    if (aa < bb) return 1;
+    if (aa > bb) return -1;
+    return String(a.listing_id).localeCompare(String(b.listing_id));
+  });
+
+  return { ok: true, items: out };
+}
+

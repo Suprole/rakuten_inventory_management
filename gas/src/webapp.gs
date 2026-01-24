@@ -57,6 +57,10 @@ function handleApi(method, e) {
       if (e && e.postData && e.postData.contents) body4 = JSON.parse(e.postData.contents);
       return jsonResponse(200, upsertListingHandling_(body4));
     }
+    if (method === 'GET' && path === '/master/listing_handling/list') {
+      var st = e && e.parameter ? e.parameter.handling_status || e.parameter.status : '';
+      return jsonResponse(200, listListingHandling_({ handling_status: st }));
+    }
 
     return jsonResponse(404, { ok: false, error: 'not_found', path: path, method: method });
   } catch (err) {

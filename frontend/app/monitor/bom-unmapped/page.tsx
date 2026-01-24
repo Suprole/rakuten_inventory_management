@@ -31,15 +31,43 @@ import {
 export default function BomUnmappedMonitorPage() {
   const s = useUnmappedListings();
   const items = s.data ?? [];
-  const hasAny = items.length > 0;
 
   const [localItems, setLocalItems] = useState(items);
+  const [excluded, setExcluded] = useState<Array<{
+    listing_id: string;
+    store_id?: string;
+    rakuten_item_no?: string;
+    rakuten_sku?: string;
+    note?: string;
+    updated_at?: string;
+    updated_by?: string;
+  }>>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [lastMessage, setLastMessage] = useState<string>('');
 
   useEffect(() => {
     setLocalItems(items);
   }, [items]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadExcluded() {
+      try {
+        const res = await fetch('/api/master/listing-handling?status=unavailable', { cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok || !json || typeof json !== 'object' || (json as any).ok === false) return;
+        const arr = Array.isArray((json as any).items) ? (json as any).items : [];
+        if (cancelled) return;
+        setExcluded(arr);
+      } catch {
+        // no-op
+      }
+    }
+    loadExcluded();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const sorted = useMemo(() => [...localItems].sort((a, b) => {
     // 優先度: 在庫あり → 売上あり → 件数
@@ -75,6 +103,42 @@ export default function BomUnmappedMonitorPage() {
       // A方針：次回ETLで監視から消えるので、画面上も即時除外
       setLocalItems((prev) => prev.filter((i) => i.listing_id !== x.listing_id));
       setLastMessage('取り扱い不可に設定しました。次回ETL後に監視から除外されます。');
+      setExcluded((prev) => [
+        {
+          listing_id: x.listing_id,
+          store_id: x.store_id,
+          rakuten_item_no: x.rakuten_item_no,
+          rakuten_sku: x.rakuten_sku,
+        },
+        ...prev,
+      ]);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function unmarkUnavailable(x: { listing_id: string; store_id?: string; rakuten_item_no?: string; rakuten_sku?: string }) {
+    setPendingId(x.listing_id);
+    setLastMessage('');
+    try {
+      const res = await fetch('/api/master/listing-handling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listing_id: x.listing_id,
+          store_id: x.store_id,
+          rakuten_item_no: x.rakuten_item_no,
+          rakuten_sku: x.rakuten_sku,
+          handling_status: 'normal',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || (json && typeof json === 'object' && (json as any).ok === false)) {
+        const msg = (json && typeof json === 'object' && (json as any).message) ? String((json as any).message) : '更新に失敗しました';
+        throw new Error(msg);
+      }
+      setExcluded((prev) => prev.filter((i) => i.listing_id !== x.listing_id));
+      setLastMessage('取り扱い不可を解除しました。次回ETL後から監視対象に戻ります。');
     } finally {
       setPendingId(null);
     }
@@ -106,10 +170,10 @@ export default function BomUnmappedMonitorPage() {
         )}
 
         <div className="mb-6 grid gap-4 md:grid-cols-2">
-          <Card className={hasAny ? 'border-destructive' : 'border-success'}>
+          <Card className={localItems.length > 0 ? 'border-destructive' : 'border-success'}>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                {hasAny ? (
+                {localItems.length > 0 ? (
                   <>
                     <AlertCircle className="h-4 w-4 text-destructive" />
                     検出数
@@ -123,7 +187,7 @@ export default function BomUnmappedMonitorPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={cn('text-3xl font-bold', hasAny ? 'text-destructive' : 'text-success')}>
+              <div className={cn('text-3xl font-bold', localItems.length > 0 ? 'text-destructive' : 'text-success')}>
                 {s.status === 'loading' ? '-' : localItems.length}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -139,7 +203,7 @@ export default function BomUnmappedMonitorPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {hasAny ? (
+              {localItems.length > 0 ? (
                 <Badge className="bg-destructive text-destructive-foreground text-base">
                   要整備
                 </Badge>
@@ -159,6 +223,74 @@ export default function BomUnmappedMonitorPage() {
           <div className="mb-6 rounded-md border border-border bg-card p-3 text-sm text-foreground">
             {lastMessage}
           </div>
+        )}
+
+        {excluded.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>除外中（取り扱い不可）</CardTitle>
+              <CardDescription>
+                「取り扱い不可」として登録済みのSKUです。解除すると次回ETL後から監視対象に戻ります。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="font-semibold">店舗</TableHead>
+                      <TableHead className="font-semibold">商品管理番号</TableHead>
+                      <TableHead className="font-semibold">SKU番号</TableHead>
+                      <TableHead className="font-semibold">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {excluded.map((x) => (
+                      <TableRow key={`excluded:${x.listing_id}`}>
+                        <TableCell>
+                          <Badge variant="outline">{x.store_id || '-'}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{x.rakuten_item_no || '-'}</TableCell>
+                        <TableCell className="font-mono text-sm">{x.rakuten_sku || '-'}</TableCell>
+                        <TableCell>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="outline" className="bg-transparent" disabled={pendingId !== null}>
+                                {pendingId === x.listing_id ? '更新中...' : '解除'}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>取り扱い不可を解除しますか？</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  解除すると次回ETL後から「BOM未紐付け監視」に再び出る可能性があります。
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel disabled={pendingId !== null}>キャンセル</AlertDialogCancel>
+                                <AlertDialogAction
+                                  disabled={pendingId !== null}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    unmarkUnavailable(x).catch((err) => {
+                                      const msg = err instanceof Error ? err.message : String(err);
+                                      setLastMessage(`更新に失敗しました: ${msg}`);
+                                    });
+                                  }}
+                                >
+                                  解除する
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {s.status === 'loading' ? (
@@ -236,7 +368,7 @@ export default function BomUnmappedMonitorPage() {
                                 <AlertDialogTitle>取り扱い不可にしますか？</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   このSKUを「取り扱い不可」として登録し、次回ETL以降の「BOM未紐付け監視」から除外します。
-                                  元に戻す機能は後で追加できます（必要なら言ってください）。
+                                  解除したい場合は、このページの「除外中（取り扱い不可）」から解除できます。
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
