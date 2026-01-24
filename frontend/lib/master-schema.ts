@@ -41,3 +41,28 @@ export const ListingHandlingListResponseSchema = z.object({
   message: z.string().optional(),
 });
 
+export const ListingHandlingBulkUpsertPayloadSchema = z.object({
+  handling_status: ListingHandlingStatusSchema.optional(), // 省略時は各item側またはunavailable
+  note: z.string().optional(),
+  items: z.array(ListingHandlingUpsertPayloadSchema).min(1).max(50),
+});
+
+export const ListingHandlingBulkUpsertResultSchema = z.object({
+  ok: z.boolean(),
+  listing_id: z.string().optional(),
+  handling_status: ListingHandlingStatusSchema.optional(),
+  updated_at: z.string().optional(),
+  updated_by: z.string().optional(),
+  error: z.string().optional(),
+  idx: z.number().optional(),
+});
+
+export const ListingHandlingBulkUpsertResponseSchema = z.object({
+  ok: z.boolean(),
+  updated: z.number().optional(),
+  failed: z.number().optional(),
+  results: z.array(ListingHandlingBulkUpsertResultSchema).optional(),
+  error: z.string().optional(),
+  message: z.string().optional(),
+});
+

@@ -135,3 +135,63 @@ function listListingHandling_(params) {
   return { ok: true, items: out };
 }
 
+function bulkUpsertListingHandling_(payload) {
+  payload = payload || {};
+  var items = payload.items;
+  if (!items || !items.length) throw new Error('items is required');
+  if (items.length > 50) throw new Error('items must be <= 50');
+
+  // 共通値（任意）
+  var commonStatus = toStringSafe(payload.handling_status);
+  if (commonStatus && commonStatus !== 'normal' && commonStatus !== 'unavailable') {
+    throw new Error('invalid handling_status: ' + commonStatus);
+  }
+  var updated_by = toStringSafe(payload.updated_by || payload.actor || '');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30 * 1000);
+  try {
+    var results = [];
+    var okCount = 0;
+    var failCount = 0;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i] || {};
+      var lid = toStringSafe(it.listing_id);
+      if (!lid) {
+        failCount++;
+        results.push({ ok: false, error: 'listing_id is required', idx: i });
+        continue;
+      }
+
+      // item側のstatus優先、無ければcommonStatus、無ければunavailable（この画面の用途）
+      var st = toStringSafe(it.handling_status) || commonStatus || 'unavailable';
+      if (st !== 'normal' && st !== 'unavailable') {
+        failCount++;
+        results.push({ ok: false, listing_id: lid, error: 'invalid handling_status: ' + st });
+        continue;
+      }
+
+      try {
+        var r = upsertListingHandling_({
+          listing_id: lid,
+          store_id: it.store_id,
+          rakuten_item_no: it.rakuten_item_no,
+          rakuten_sku: it.rakuten_sku,
+          handling_status: st,
+          note: it.note,
+          updated_by: updated_by,
+        });
+        okCount++;
+        results.push({ ok: true, listing_id: lid, handling_status: st, updated_at: r.updated_at, updated_by: r.updated_by });
+      } catch (e) {
+        failCount++;
+        var msg = e && e.message ? e.message : String(e);
+        results.push({ ok: false, listing_id: lid, error: msg });
+      }
+    }
+    return { ok: failCount === 0, updated: okCount, failed: failCount, results: results };
+  } finally {
+    lock.releaseLock();
+  }
+}
+

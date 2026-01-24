@@ -1,4 +1,10 @@
-import { ListingHandlingListResponseSchema, ListingHandlingUpsertPayloadSchema, ListingHandlingUpsertResponseSchema } from '@/lib/master-schema';
+import {
+  ListingHandlingBulkUpsertPayloadSchema,
+  ListingHandlingBulkUpsertResponseSchema,
+  ListingHandlingListResponseSchema,
+  ListingHandlingUpsertPayloadSchema,
+  ListingHandlingUpsertResponseSchema,
+} from '@/lib/master-schema';
 
 function getGasConfig(): { baseUrl: string; apiKey: string } {
   const baseUrl = (process.env.GAS_WEBAPP_URL || '').trim();
@@ -93,6 +99,31 @@ export async function listListingHandling(params: {
   });
   const parsed = ListingHandlingListResponseSchema.safeParse(json);
   if (!parsed.success) throw new Error(`GAS listing_handling/list の形式が不正です: ${parsed.error.message}`);
+  return parsed.data;
+}
+
+export async function bulkUpsertListingHandling(params: {
+  payload: unknown;
+  updatedBy?: string;
+  requestId?: string;
+}): Promise<unknown> {
+  const input = ListingHandlingBulkUpsertPayloadSchema.safeParse(params.payload);
+  if (!input.success) throw new Error(`listing_handling/bulk_upsert の入力が不正です: ${input.error.message}`);
+
+  const body = {
+    ...input.data,
+    updated_by: (params.updatedBy || '').trim(),
+  };
+
+  const json = await gasFetch<unknown>({
+    path: '/master/listing_handling/bulk_upsert',
+    method: 'POST',
+    body,
+    requestId: params.requestId,
+  });
+
+  const parsed = ListingHandlingBulkUpsertResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error(`GAS listing_handling/bulk_upsert の形式が不正です: ${parsed.error.message}`);
   return parsed.data;
 }
 

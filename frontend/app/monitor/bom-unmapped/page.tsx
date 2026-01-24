@@ -17,6 +17,7 @@ import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useUnmappedListings } from '@/lib/use-view';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +45,7 @@ export default function BomUnmappedMonitorPage() {
   }>>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [lastMessage, setLastMessage] = useState<string>('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +84,90 @@ export default function BomUnmappedMonitorPage() {
     if (aSales !== bSales) return bSales - aSales;
     return b.stock_qty - a.stock_qty;
   }), [unmappedItems]);
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedCount = selectedIds.length;
+  const allVisibleIds = useMemo(() => sorted.map((x) => x.listing_id), [sorted]);
+  const allVisibleSelected = useMemo(
+    () => allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedSet.has(id)),
+    [allVisibleIds, selectedSet]
+  );
+
+  function toggleSelectOne(id: string, checked: boolean) {
+    if (checked && selectedCount >= 50 && !selectedSet.has(id)) {
+      setLastMessage('一括操作は最大50件です。先に実行するか、選択を減らしてください。');
+      return;
+    }
+    setLastMessage('');
+    setSelectedIds((prev) => {
+      const has = prev.includes(id);
+      if (checked) return has ? prev : [...prev, id];
+      return has ? prev.filter((x) => x !== id) : prev;
+    });
+  }
+
+  function toggleSelectAllVisible(checked: boolean) {
+    setLastMessage('');
+    if (!checked) {
+      setSelectedIds((prev) => prev.filter((id) => !allVisibleIds.includes(id)));
+      return;
+    }
+    const merged = Array.from(new Set([...selectedIds, ...allVisibleIds]));
+    if (merged.length > 50) {
+      setSelectedIds(merged.slice(0, 50));
+      setLastMessage('一括操作は最大50件です。先頭50件まで選択しました。');
+      return;
+    }
+    setSelectedIds(merged);
+  }
+
+  async function bulkMarkUnavailable() {
+    if (selectedIds.length === 0) return;
+    setPendingId('bulk');
+    setLastMessage('');
+    try {
+      const targets = sorted.filter((x) => selectedSet.has(x.listing_id)).slice(0, 50);
+      const res = await fetch('/api/master/listing-handling/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handling_status: 'unavailable',
+          items: targets.map((x) => ({
+            listing_id: x.listing_id,
+            store_id: x.store_id,
+            rakuten_item_no: x.rakuten_item_no,
+            rakuten_sku: x.rakuten_sku,
+            handling_status: 'unavailable',
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const msg = (json && typeof json === 'object' && (json as any).message)
+          ? String((json as any).message)
+          : '一括更新に失敗しました';
+        throw new Error(msg);
+      }
+
+      const updated = json && typeof json === 'object' && (json as any).updated !== undefined ? Number((json as any).updated) : targets.length;
+      const failed = json && typeof json === 'object' && (json as any).failed !== undefined ? Number((json as any).failed) : 0;
+
+      // 画面上は即時除外（excludedに追加）
+      setExcluded((prev) => [
+        ...targets.map((x) => ({
+          listing_id: x.listing_id,
+          store_id: x.store_id,
+          rakuten_item_no: x.rakuten_item_no,
+          rakuten_sku: x.rakuten_sku,
+        })),
+        ...prev,
+      ]);
+      setSelectedIds([]);
+      setLastMessage(`一括で取り扱い不可にしました: 成功${updated}件 / 失敗${failed}件`);
+    } finally {
+      setPendingId(null);
+    }
+  }
 
   async function markUnavailable(x: (typeof items)[number]) {
     setPendingId(x.listing_id);
@@ -261,10 +347,67 @@ export default function BomUnmappedMonitorPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
+                  <div className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="text-sm text-muted-foreground">
+                      選択中: <span className="font-semibold text-foreground">{selectedCount}</span>件（最大50件）
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-transparent"
+                        onClick={() => setSelectedIds([])}
+                        disabled={selectedCount === 0 || pendingId !== null}
+                      >
+                        選択解除
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={selectedCount === 0 || pendingId !== null}
+                          >
+                            {pendingId === 'bulk' ? '一括更新中...' : '選択分を取り扱い不可'}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>選択したSKUを取り扱い不可にしますか？</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              選択中 {selectedCount} 件を「取り扱い不可」として登録し、次回ETL以降の「BOM未紐付け監視」から除外します。
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={pendingId !== null}>キャンセル</AlertDialogCancel>
+                            <AlertDialogAction
+                              disabled={pendingId !== null}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                bulkMarkUnavailable().catch((err) => {
+                                  const msg = err instanceof Error ? err.message : String(err);
+                                  setLastMessage(`一括更新に失敗しました: ${msg}`);
+                                });
+                              }}
+                            >
+                              一括で取り扱い不可にする
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent">
+                          <TableHead className="w-[44px]">
+                            <Checkbox
+                              checked={allVisibleSelected}
+                              onCheckedChange={(v) => toggleSelectAllVisible(Boolean(v))}
+                              aria-label="表示中を全選択"
+                            />
+                          </TableHead>
                           <TableHead className="font-semibold">店舗</TableHead>
                           <TableHead className="font-semibold">商品管理番号</TableHead>
                           <TableHead className="font-semibold">SKU番号</TableHead>
@@ -282,6 +425,13 @@ export default function BomUnmappedMonitorPage() {
                               x.stock_qty > 0 ? 'hover:bg-destructive/5' : 'hover:bg-accent/30'
                             )}
                           >
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedSet.has(x.listing_id)}
+                                onCheckedChange={(v) => toggleSelectOne(x.listing_id, Boolean(v))}
+                                aria-label={`選択 ${x.listing_id}`}
+                              />
+                            </TableCell>
                             <TableCell>
                               <Badge variant="outline">
                                 {x.store_id}
