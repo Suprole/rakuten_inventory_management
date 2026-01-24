@@ -10,6 +10,7 @@ function validateSheetsSchema() {
     { name: 'config_sources', required: ['store_id', 'spreadsheet_id', 'sheet_name'] },
     { name: 'items', required: ['internal_id', 'name', 'active'] },
     { name: 'listings', required: ['listing_id', 'store_id', 'rakuten_item_no', 'rakuten_sku', 'active'] },
+    { name: 'listing_handling', required: ['listing_id', 'handling_status'] },
     { name: 'bom', required: ['listing_id', 'internal_id', 'qty'] },
     { name: 'po_header', required: ['po_id', 'created_at', 'status', 'supplier', 'note'] },
     { name: 'po_lines', required: ['po_id', 'line_no', 'internal_id', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'] },

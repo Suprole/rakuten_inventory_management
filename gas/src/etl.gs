@@ -77,6 +77,26 @@ function readListings_() {
   return out;
 }
 
+function readListingHandling_() {
+  // listing_id -> { handling_status }
+  // NOTE: listing_handling は運用で増えるため、最新行優先（同じlisting_idが複数ある場合は後勝ち）
+  var values = readActiveSpreadsheetSheetValues('listing_handling');
+  if (values.length < 2) return {};
+  var header = indexHeader(values[0]);
+  requireCols(header, ['listing_id', 'handling_status'], 'listing_handling');
+
+  var out = {};
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var listing_id = toStringSafe(row[header['listing_id']]);
+    if (!listing_id) continue;
+    var st = toStringSafe(row[header['handling_status']]) || 'normal';
+    if (st !== 'normal' && st !== 'unavailable') st = 'normal';
+    out[listing_id] = { handling_status: st };
+  }
+  return out;
+}
+
 function readBom_(itemsMap) {
   var values = readActiveSpreadsheetSheetValues('bom');
   if (values.length < 2) throw new Error('bom is empty');
@@ -140,6 +160,7 @@ function runEtlOnce() {
   // 2) マスタ
   var itemsMap = readItems_();
   var listingsMap = readListings_();
+  var listingHandling = readListingHandling_();
   var bomByListing = readBom_(itemsMap);
 
   // 3) 店舗別データ
@@ -330,6 +351,8 @@ function runEtlOnce() {
   function collectUnmapped_(storeId, stockByListing, salesByListing) {
     for (var lid in stockByListing) {
       if (bomByListing[lid]) continue;
+      // 「取り扱い不可」にされたSKUは監視から除外（A方針）
+      if (listingHandling[lid] && listingHandling[lid].handling_status === 'unavailable') continue;
       // listing_id は store|itemNo|sku の前提
       var p = String(lid).split('|');
       var itemNo = p.length >= 2 ? p[1] : '';

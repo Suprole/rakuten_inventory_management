@@ -28,6 +28,17 @@ function setupMasterSpreadsheet() {
     'title',
     'active',
   ]);
+  // BOM未紐付け監視の「取り扱い不可」管理（listing_id単位のフラグ）
+  createOrResetHeader_(ss, 'listing_handling', [
+    'listing_id',
+    'store_id',
+    'rakuten_item_no',
+    'rakuten_sku',
+    'handling_status', // normal / unavailable
+    'note',
+    'updated_at',
+    'updated_by',
+  ]);
   createOrResetHeader_(ss, 'bom', ['listing_id', 'internal_id', 'qty']);
 
   // 発注タブ（後続のPO実装で使う。先に枠だけ作る）
@@ -40,6 +51,18 @@ function setupMasterSpreadsheet() {
     'unit_cost',
     'basis_need_qty',
     'basis_days_of_cover',
+  ]);
+
+  // 監査ログ（任意だが推奨）
+  createOrResetHeader_(ss, 'audit_log', [
+    'ts',
+    'actor',
+    'action',
+    'entity_type',
+    'entity_id',
+    'before',
+    'after',
+    'note',
   ]);
 
   // config_sources の補助入力（例）

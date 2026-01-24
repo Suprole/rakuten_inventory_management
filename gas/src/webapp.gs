@@ -51,6 +51,13 @@ function handleApi(method, e) {
       return jsonResponse(200, poDelete_(body3.po_id));
     }
 
+    // マスタ更新（listing単位の「取り扱い不可」）
+    if (method === 'POST' && path === '/master/listing_handling/upsert') {
+      var body4 = {};
+      if (e && e.postData && e.postData.contents) body4 = JSON.parse(e.postData.contents);
+      return jsonResponse(200, upsertListingHandling_(body4));
+    }
+
     return jsonResponse(404, { ok: false, error: 'not_found', path: path, method: method });
   } catch (err) {
     var msg = err && err.message ? err.message : String(err);

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { Navigation } from '@/components/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,13 +16,32 @@ import { Button } from '@/components/ui/button';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useUnmappedListings } from '@/lib/use-view';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function BomUnmappedMonitorPage() {
   const s = useUnmappedListings();
   const items = s.data ?? [];
   const hasAny = items.length > 0;
 
-  const sorted = [...items].sort((a, b) => {
+  const [localItems, setLocalItems] = useState(items);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [lastMessage, setLastMessage] = useState<string>('');
+
+  useEffect(() => {
+    setLocalItems(items);
+  }, [items]);
+
+  const sorted = useMemo(() => [...localItems].sort((a, b) => {
     // 優先度: 在庫あり → 売上あり → 件数
     const aHasStock = a.stock_qty > 0 ? 1 : 0;
     const bHasStock = b.stock_qty > 0 ? 1 : 0;
@@ -30,7 +50,35 @@ export default function BomUnmappedMonitorPage() {
     const bSales = (b.this_month_sales || 0) + (b.last_month_sales || 0);
     if (aSales !== bSales) return bSales - aSales;
     return b.stock_qty - a.stock_qty;
-  });
+  }), [localItems]);
+
+  async function markUnavailable(x: (typeof localItems)[number]) {
+    setPendingId(x.listing_id);
+    setLastMessage('');
+    try {
+      const res = await fetch('/api/master/listing-handling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listing_id: x.listing_id,
+          store_id: x.store_id,
+          rakuten_item_no: x.rakuten_item_no,
+          rakuten_sku: x.rakuten_sku,
+          handling_status: 'unavailable',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || (json && typeof json === 'object' && (json as any).ok === false)) {
+        const msg = (json && typeof json === 'object' && (json as any).message) ? String((json as any).message) : '更新に失敗しました';
+        throw new Error(msg);
+      }
+      // A方針：次回ETLで監視から消えるので、画面上も即時除外
+      setLocalItems((prev) => prev.filter((i) => i.listing_id !== x.listing_id));
+      setLastMessage('取り扱い不可に設定しました。次回ETL後に監視から除外されます。');
+    } finally {
+      setPendingId(null);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -76,10 +124,10 @@ export default function BomUnmappedMonitorPage() {
             </CardHeader>
             <CardContent>
               <div className={cn('text-3xl font-bold', hasAny ? 'text-destructive' : 'text-success')}>
-                {s.status === 'loading' ? '-' : items.length}
+                {s.status === 'loading' ? '-' : localItems.length}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                {hasAny ? 'BOM未紐付けのSKUが存在します' : 'BOM未紐付けは検出されませんでした'}
+                {localItems.length > 0 ? 'BOM未紐付けのSKUが存在します' : 'BOM未紐付けは検出されませんでした'}
               </p>
             </CardContent>
           </Card>
@@ -107,13 +155,19 @@ export default function BomUnmappedMonitorPage() {
           </Card>
         </div>
 
+        {lastMessage && (
+          <div className="mb-6 rounded-md border border-border bg-card p-3 text-sm text-foreground">
+            {lastMessage}
+          </div>
+        )}
+
         {s.status === 'loading' ? (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">読み込み中...</p>
             </CardContent>
           </Card>
-        ) : hasAny ? (
+        ) : localItems.length > 0 ? (
           <Card className="border-destructive">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
@@ -135,6 +189,7 @@ export default function BomUnmappedMonitorPage() {
                       <TableHead className="text-right font-semibold">在庫</TableHead>
                       <TableHead className="text-right font-semibold">先月売上</TableHead>
                       <TableHead className="text-right font-semibold">今月売上</TableHead>
+                      <TableHead className="font-semibold">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -164,6 +219,43 @@ export default function BomUnmappedMonitorPage() {
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {x.this_month_sales.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={pendingId !== null}
+                              >
+                                {pendingId === x.listing_id ? '更新中...' : '取り扱い不可'}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>取り扱い不可にしますか？</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  このSKUを「取り扱い不可」として登録し、次回ETL以降の「BOM未紐付け監視」から除外します。
+                                  元に戻す機能は後で追加できます（必要なら言ってください）。
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel disabled={pendingId !== null}>キャンセル</AlertDialogCancel>
+                                <AlertDialogAction
+                                  disabled={pendingId !== null}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    markUnavailable(x).catch((err) => {
+                                      const msg = err instanceof Error ? err.message : String(err);
+                                      setLastMessage(`更新に失敗しました: ${msg}`);
+                                    });
+                                  }}
+                                >
+                                  取り扱い不可にする
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </TableCell>
                       </TableRow>
                     ))}
