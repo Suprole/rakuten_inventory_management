@@ -372,6 +372,34 @@ function runEtlOnce() {
   collectUnmapped_('metro', metroData.stockByListing, metroData.salesByListing);
   collectUnmapped_('windy', windyData.stockByListing, windyData.salesByListing);
 
+  // 10) listingスナップショット（全SKU、表示用の最新値）
+  // NOTE: 未紐付け/除外中とも「同じ算出元の最新値」を見せるためのview
+  var listingSnapshots = [];
+  function collectSnapshots_(storeId, stockByListing, salesByListing) {
+    // salesByListing が正とみなせるが、念のためstock側もunion
+    var keys = {};
+    for (var lid1 in salesByListing) keys[lid1] = true;
+    for (var lid2 in stockByListing) keys[lid2] = true;
+    for (var lid in keys) {
+      // listing_id は store|itemNo|sku の前提
+      var p = String(lid).split('|');
+      var itemNo = p.length >= 2 ? p[1] : '';
+      var sku = p.length >= 3 ? p.slice(2).join('|') : '';
+      var sales = salesByListing[lid] || { LM: 0, CM: 0 };
+      listingSnapshots.push({
+        store_id: storeId,
+        listing_id: lid,
+        rakuten_item_no: itemNo,
+        rakuten_sku: sku,
+        stock_qty: stockByListing[lid] || 0,
+        last_month_sales: sales.LM || 0,
+        this_month_sales: sales.CM || 0,
+      });
+    }
+  }
+  collectSnapshots_('metro', metroData.stockByListing, metroData.salesByListing);
+  collectSnapshots_('windy', windyData.stockByListing, windyData.salesByListing);
+
   Logger.log(
     JSON.stringify({
       ok: true,
@@ -380,10 +408,11 @@ function runEtlOnce() {
       itemMetrics: itemMetrics.length,
       mirrorMismatches: mirrorMismatches.length,
       unmappedListings: unmappedListings.length,
+      listingSnapshots: listingSnapshots.length,
       ms: Date.now() - started,
     })
   );
 
-  return { itemMetrics: itemMetrics, mirrorMismatches: mirrorMismatches, unmappedListings: unmappedListings };
+  return { itemMetrics: itemMetrics, mirrorMismatches: mirrorMismatches, unmappedListings: unmappedListings, listingSnapshots: listingSnapshots };
 }
 

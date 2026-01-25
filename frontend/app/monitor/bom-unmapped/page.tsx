@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useUnmappedListings } from '@/lib/use-view';
+import { useListingSnapshots, useUnmappedListings } from '@/lib/use-view';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -32,13 +32,18 @@ import {
 
 export default function BomUnmappedMonitorPage() {
   const s = useUnmappedListings();
+  const snapshotState = useListingSnapshots();
   const items = s.data ?? [];
+  const snapshots = snapshotState.data ?? [];
 
   const [excluded, setExcluded] = useState<Array<{
     listing_id: string;
     store_id?: string;
     rakuten_item_no?: string;
     rakuten_sku?: string;
+    stock_qty?: number;
+    last_month_sales?: number;
+    this_month_sales?: number;
     note?: string;
     updated_at?: string;
     updated_by?: string;
@@ -68,6 +73,13 @@ export default function BomUnmappedMonitorPage() {
   }, []);
 
   const excludedIdSet = useMemo(() => new Set(excluded.map((x) => x.listing_id)), [excluded]);
+  const snapshotById = useMemo(() => {
+    const m = new Map<string, { stock_qty: number; last_month_sales: number; this_month_sales: number }>();
+    for (const r of snapshots) {
+      m.set(r.listing_id, { stock_qty: r.stock_qty, last_month_sales: r.last_month_sales, this_month_sales: r.this_month_sales });
+    }
+    return m;
+  }, [snapshots]);
 
   const unmappedItems = useMemo(() => {
     // NOTE: ETL未反映でも、画面上は「取り扱い不可」を除外する
@@ -137,6 +149,9 @@ export default function BomUnmappedMonitorPage() {
             store_id: x.store_id,
             rakuten_item_no: x.rakuten_item_no,
             rakuten_sku: x.rakuten_sku,
+            stock_qty: x.stock_qty,
+            last_month_sales: x.last_month_sales,
+            this_month_sales: x.this_month_sales,
             handling_status: 'unavailable',
           })),
         }),
@@ -159,6 +174,9 @@ export default function BomUnmappedMonitorPage() {
           store_id: x.store_id,
           rakuten_item_no: x.rakuten_item_no,
           rakuten_sku: x.rakuten_sku,
+          stock_qty: x.stock_qty,
+          last_month_sales: x.last_month_sales,
+          this_month_sales: x.this_month_sales,
         })),
         ...prev,
       ]);
@@ -181,6 +199,9 @@ export default function BomUnmappedMonitorPage() {
           store_id: x.store_id,
           rakuten_item_no: x.rakuten_item_no,
           rakuten_sku: x.rakuten_sku,
+          stock_qty: x.stock_qty,
+          last_month_sales: x.last_month_sales,
+          this_month_sales: x.this_month_sales,
           handling_status: 'unavailable',
         }),
       });
@@ -196,6 +217,9 @@ export default function BomUnmappedMonitorPage() {
           store_id: x.store_id,
           rakuten_item_no: x.rakuten_item_no,
           rakuten_sku: x.rakuten_sku,
+          stock_qty: x.stock_qty,
+          last_month_sales: x.last_month_sales,
+          this_month_sales: x.this_month_sales,
         },
         ...prev,
       ]);
@@ -527,51 +551,63 @@ export default function BomUnmappedMonitorPage() {
                           <TableHead className="font-semibold">店舗</TableHead>
                           <TableHead className="font-semibold">商品管理番号</TableHead>
                           <TableHead className="font-semibold">SKU番号</TableHead>
+                          <TableHead className="text-right font-semibold">在庫</TableHead>
+                          <TableHead className="text-right font-semibold">先月売上</TableHead>
+                          <TableHead className="text-right font-semibold">今月売上</TableHead>
                           <TableHead className="font-semibold">操作</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {excluded.map((x) => (
-                          <TableRow key={`excluded:${x.listing_id}`}>
-                            <TableCell>
-                              <Badge variant="outline">{x.store_id || '-'}</Badge>
-                            </TableCell>
-                            <TableCell className="font-mono text-sm">{x.rakuten_item_no || '-'}</TableCell>
-                            <TableCell className="font-mono text-sm">{x.rakuten_sku || '-'}</TableCell>
-                            <TableCell>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="outline" className="bg-transparent" disabled={pendingId !== null}>
-                                    {pendingId === x.listing_id ? '更新中...' : '解除'}
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>取り扱い不可を解除しますか？</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      解除すると、このSKUは監視対象に戻ります。
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel disabled={pendingId !== null}>キャンセル</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      disabled={pendingId !== null}
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        unmarkUnavailable(x).catch((err) => {
-                                          const msg = err instanceof Error ? err.message : String(err);
-                                          setLastMessage(`更新に失敗しました: ${msg}`);
-                                        });
-                                      }}
-                                    >
-                                      解除する
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {excluded.map((x) => {
+                          const snap = snapshotById.get(x.listing_id);
+                          const stockQty = snap ? snap.stock_qty : x.stock_qty;
+                          const lm = snap ? snap.last_month_sales : x.last_month_sales;
+                          const cm = snap ? snap.this_month_sales : x.this_month_sales;
+                          return (
+                            <TableRow key={`excluded:${x.listing_id}`}>
+                              <TableCell>
+                                <Badge variant="outline">{x.store_id || '-'}</Badge>
+                              </TableCell>
+                              <TableCell className="font-mono text-sm">{x.rakuten_item_no || '-'}</TableCell>
+                              <TableCell className="font-mono text-sm">{x.rakuten_sku || '-'}</TableCell>
+                              <TableCell className="text-right font-mono">{stockQty !== undefined ? stockQty.toLocaleString() : '-'}</TableCell>
+                              <TableCell className="text-right font-mono">{lm !== undefined ? lm.toLocaleString() : '-'}</TableCell>
+                              <TableCell className="text-right font-mono">{cm !== undefined ? cm.toLocaleString() : '-'}</TableCell>
+                              <TableCell>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button size="sm" variant="outline" className="bg-transparent" disabled={pendingId !== null}>
+                                      {pendingId === x.listing_id ? '更新中...' : '解除'}
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>取り扱い不可を解除しますか？</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        解除すると、このSKUは監視対象に戻ります。
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel disabled={pendingId !== null}>キャンセル</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        disabled={pendingId !== null}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          unmarkUnavailable(x).catch((err) => {
+                                            const msg = err instanceof Error ? err.message : String(err);
+                                            setLastMessage(`更新に失敗しました: ${msg}`);
+                                          });
+                                        }}
+                                      >
+                                        解除する
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

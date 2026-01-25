@@ -5,6 +5,8 @@ import {
   type MirrorMismatch,
   UnmappedListingsSchema,
   type UnmappedListing,
+  ListingSnapshotsSchema,
+  type ListingSnapshot,
 } from './view-schema';
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -35,5 +37,11 @@ export async function fetchUnmappedListings(): Promise<UnmappedListing[]> {
   const url = `/api/view/unmapped-listings`;
   const data = await fetchJson(url);
   return UnmappedListingsSchema.parse(data);
+}
+
+export async function fetchListingSnapshots(): Promise<ListingSnapshot[]> {
+  const url = `/api/view/listing-snapshot`;
+  const data = await fetchJson(url);
+  return ListingSnapshotsSchema.parse(data);
 }
 

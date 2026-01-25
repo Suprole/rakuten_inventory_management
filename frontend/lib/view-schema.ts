@@ -65,7 +65,20 @@ export const UnmappedListingSchema = z.object({
 
 export const UnmappedListingsSchema = z.array(UnmappedListingSchema);
 
+export const ListingSnapshotSchema = z.object({
+  store_id: z.enum(['metro', 'windy']),
+  listing_id: z.string(),
+  rakuten_item_no: z.string(),
+  rakuten_sku: z.string(),
+  stock_qty: z.number(),
+  last_month_sales: z.number(),
+  this_month_sales: z.number(),
+});
+
+export const ListingSnapshotsSchema = z.array(ListingSnapshotSchema);
+
 export type ItemMetric = z.infer<typeof ItemMetricSchema>;
 export type MirrorMismatch = z.infer<typeof MirrorMismatchSchema>;
 export type UnmappedListing = z.infer<typeof UnmappedListingSchema>;
+export type ListingSnapshot = z.infer<typeof ListingSnapshotSchema>;
 

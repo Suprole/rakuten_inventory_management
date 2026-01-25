@@ -15,6 +15,10 @@ function upsertListingHandling_(payload) {
   var store_id = toStringSafe(payload.store_id);
   var rakuten_item_no = toStringSafe(payload.rakuten_item_no);
   var rakuten_sku = toStringSafe(payload.rakuten_sku);
+  // 取り扱い不可にした時点の参考値（任意）
+  var stock_qty = payload.stock_qty !== undefined ? toNumberSafe(payload.stock_qty) : undefined;
+  var last_month_sales = payload.last_month_sales !== undefined ? toNumberSafe(payload.last_month_sales) : undefined;
+  var this_month_sales = payload.this_month_sales !== undefined ? toNumberSafe(payload.this_month_sales) : undefined;
   var note = toStringSafe(payload.note);
 
   // 既存取得（beforeを監査ログに残す）
@@ -42,6 +46,9 @@ function upsertListingHandling_(payload) {
     store_id: store_id,
     rakuten_item_no: rakuten_item_no,
     rakuten_sku: rakuten_sku,
+    stock_qty: stock_qty,
+    last_month_sales: last_month_sales,
+    this_month_sales: this_month_sales,
     handling_status: handling_status,
     note: note,
     updated_at: updated_at,
@@ -49,14 +56,25 @@ function upsertListingHandling_(payload) {
   });
 
   if (!ok) {
+    // 既存シートが古くても動くように、存在する列だけでappendする
+    var tAppend = readTable_('listing_handling');
+    var headerKeys = ['listing_id', 'store_id', 'rakuten_item_no', 'rakuten_sku', 'handling_status', 'note', 'updated_at', 'updated_by'];
+    if (tAppend && tAppend.header) {
+      if (tAppend.header['stock_qty'] !== undefined) headerKeys.splice(4, 0, 'stock_qty');
+      if (tAppend.header['last_month_sales'] !== undefined) headerKeys.splice(5, 0, 'last_month_sales');
+      if (tAppend.header['this_month_sales'] !== undefined) headerKeys.splice(6, 0, 'this_month_sales');
+    }
     appendRow_(
       'listing_handling',
-      ['listing_id', 'store_id', 'rakuten_item_no', 'rakuten_sku', 'handling_status', 'note', 'updated_at', 'updated_by'],
+      headerKeys,
       {
         listing_id: listing_id,
         store_id: store_id,
         rakuten_item_no: rakuten_item_no,
         rakuten_sku: rakuten_sku,
+        stock_qty: stock_qty,
+        last_month_sales: last_month_sales,
+        this_month_sales: this_month_sales,
         handling_status: handling_status,
         note: note,
         updated_at: updated_at,
@@ -114,6 +132,9 @@ function listListingHandling_(params) {
       store_id: t.header['store_id'] !== undefined ? toStringSafe(r[t.header['store_id']]) : '',
       rakuten_item_no: t.header['rakuten_item_no'] !== undefined ? toStringSafe(r[t.header['rakuten_item_no']]) : '',
       rakuten_sku: t.header['rakuten_sku'] !== undefined ? toStringSafe(r[t.header['rakuten_sku']]) : '',
+      stock_qty: t.header['stock_qty'] !== undefined ? toNumberSafe(r[t.header['stock_qty']]) : undefined,
+      last_month_sales: t.header['last_month_sales'] !== undefined ? toNumberSafe(r[t.header['last_month_sales']]) : undefined,
+      this_month_sales: t.header['this_month_sales'] !== undefined ? toNumberSafe(r[t.header['this_month_sales']]) : undefined,
       handling_status: st,
       note: t.header['note'] !== undefined ? toStringSafe(r[t.header['note']]) : '',
       updated_at: t.header['updated_at'] !== undefined ? toStringSafe(r[t.header['updated_at']]) : '',
@@ -177,6 +198,9 @@ function bulkUpsertListingHandling_(payload) {
           store_id: it.store_id,
           rakuten_item_no: it.rakuten_item_no,
           rakuten_sku: it.rakuten_sku,
+          stock_qty: it.stock_qty,
+          last_month_sales: it.last_month_sales,
+          this_month_sales: it.this_month_sales,
           handling_status: st,
           note: it.note,
           updated_by: updated_by,

@@ -34,6 +34,10 @@ function setupMasterSpreadsheet() {
     'store_id',
     'rakuten_item_no',
     'rakuten_sku',
+    // 取り扱い不可にした時点の参考値（任意）
+    'stock_qty',
+    'last_month_sales',
+    'this_month_sales',
     'handling_status', // normal / unavailable
     'note',
     'updated_at',
