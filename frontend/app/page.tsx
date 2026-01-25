@@ -227,7 +227,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <p className="mb-4 text-sm text-muted-foreground">
-                {mismatches.length}件のSKUで在庫のずれが確認されました。
+                {mismatches.length}件の社内IDで在庫のずれが確認されました。
                 至急確認して修正してください。
               </p>
               <Link href="/monitor/mirror">

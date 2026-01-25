@@ -31,8 +31,8 @@ export interface ItemMetric {
 }
 
 export interface MirrorMismatch {
-  rakuten_item_no: string;
-  rakuten_sku: string;
+  internal_id: string;
+  name: string;
   metro_stock_qty: number;
   windy_stock_qty: number;
   diff: number;
@@ -439,15 +439,15 @@ export const mockItemMetrics: ItemMetric[] = [
 
 export const mockMirrorMismatches: MirrorMismatch[] = [
   {
-    rakuten_item_no: '12345',
-    rakuten_sku: 'SKU-01',
+    internal_id: 'ITM-000123',
+    name: 'デッキブラシ替えスポンジ',
     metro_stock_qty: 10,
     windy_stock_qty: 8,
     diff: 2,
   },
   {
-    rakuten_item_no: '12346',
-    rakuten_sku: 'SKU-02',
+    internal_id: 'ITM-000456',
+    name: 'ハンドソープ 詰め替え用 450ml',
     metro_stock_qty: 15,
     windy_stock_qty: 18,
     diff: -3,

@@ -322,29 +322,57 @@ function runEtlOnce() {
     });
   }
 
-  // 8) ミラーずれ検知（rakuten_key）
-  // NOTE: listingsマスタに依存すると検知漏れが出るため、参照シートから直接rakuten_keyを作って突合する
-  var metroByKey = metroData.stockByRakutenKey || {};
-  var windyByKey = windyData.stockByRakutenKey || {};
+  // 8) ミラーずれ検知（internal_id）
+  // NOTE:
+  // - SKU番号が店舗ごとに異なるケースがあるため、商品管理番号|SKU番号（rakuten_key）での1:1突合は使わない。
+  // - 代わりに、各店舗の listing 在庫を BOM で internal_id に展開し、internal_id 単位で metro vs windy を比較する。
+  // - BOM未登録のlistingはここでは比較不能（unmappedListings に出す）。
+  function addInternalStock_(stockByListing, outInternal) {
+    for (var listing_id in stockByListing) {
+      var stockQty = stockByListing[listing_id] || 0;
+      // 0在庫は寄与0のためスキップしても結果は変わらない（処理量削減）
+      if (stockQty === 0) continue;
+      var refs = bomByListing[listing_id];
+      if (!refs || refs.length === 0) continue;
+      for (var i = 0; i < refs.length; i++) {
+        var ref = refs[i];
+        var internal_id = ref.internal_id;
+        var qty = ref.qty || 0;
+        if (!internal_id || qty === 0) continue;
+        var contrib = stockQty * qty;
+        outInternal[internal_id] = (outInternal[internal_id] || 0) + contrib;
+      }
+    }
+  }
 
-  var keys = {};
-  for (var k3 in metroByKey) keys[k3] = true;
-  for (var k4 in windyByKey) keys[k4] = true;
+  var metroByInternal = {};
+  var windyByInternal = {};
+  addInternalStock_(metroData.stockByListing || {}, metroByInternal);
+  addInternalStock_(windyData.stockByListing || {}, windyByInternal);
+
+  var internalKeys = {};
+  for (var kInt1 in metroByInternal) internalKeys[kInt1] = true;
+  for (var kInt2 in windyByInternal) internalKeys[kInt2] = true;
 
   var mirrorMismatches = [];
-  for (var key in keys) {
-    var metroQty = metroByKey[key] !== undefined ? metroByKey[key] : 0;
-    var windyQty = windyByKey[key] !== undefined ? windyByKey[key] : 0;
+  for (var internal_id in internalKeys) {
+    var metroQty = metroByInternal[internal_id] !== undefined ? metroByInternal[internal_id] : 0;
+    var windyQty = windyByInternal[internal_id] !== undefined ? windyByInternal[internal_id] : 0;
     if (metroQty === windyQty) continue;
-    var parts = key.split('|');
+    var item = itemsMap[internal_id];
     mirrorMismatches.push({
-      rakuten_item_no: parts[0],
-      rakuten_sku: parts[1],
+      internal_id: internal_id,
+      name: item ? item.name : '',
       metro_stock_qty: metroQty,
       windy_stock_qty: windyQty,
       diff: metroQty - windyQty,
     });
   }
+
+  // 差分が大きい順で見やすくする
+  mirrorMismatches.sort(function (a, b) {
+    return Math.abs(b.diff) - Math.abs(a.diff);
+  });
 
   // 9) 未マッピングSKU（BOM未登録）を抽出（推奨）
   var unmappedListings = [];

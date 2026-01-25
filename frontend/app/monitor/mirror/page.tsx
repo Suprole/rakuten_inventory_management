@@ -72,7 +72,7 @@ export default function MirrorMonitorPage() {
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {hasMismatches
-                  ? 'SKUで在庫のずれが確認されました'
+                  ? '社内IDで在庫のずれが確認されました'
                   : '在庫は正常に同期されています'}
               </p>
             </CardContent>
@@ -115,7 +115,7 @@ export default function MirrorMonitorPage() {
                 在庫ずれ詳細
               </CardTitle>
               <CardDescription>
-                以下のSKUでMetro店舗とWindy店舗の在庫にずれが検出されました
+                以下の社内IDでMetro店舗とWindy店舗の在庫にずれが検出されました
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -124,9 +124,11 @@ export default function MirrorMonitorPage() {
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="font-semibold">
-                        商品管理番号
+                        社内ID
                       </TableHead>
-                      <TableHead className="font-semibold">SKU番号</TableHead>
+                      <TableHead className="font-semibold">
+                        商品名
+                      </TableHead>
                       <TableHead className="text-right font-semibold">
                         Metro在庫
                       </TableHead>
@@ -141,12 +143,12 @@ export default function MirrorMonitorPage() {
                   </TableHeader>
                   <TableBody>
                     {mismatches.map((mismatch) => (
-                      <TableRow key={`${mismatch.rakuten_item_no}|${mismatch.rakuten_sku}`} className="hover:bg-destructive/5">
+                      <TableRow key={mismatch.internal_id} className="hover:bg-destructive/5">
                         <TableCell className="font-mono text-sm">
-                          {mismatch.rakuten_item_no}
+                          {mismatch.internal_id}
                         </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {mismatch.rakuten_sku}
+                        <TableCell className="text-sm">
+                          {mismatch.name}
                         </TableCell>
                         <TableCell className="text-right font-mono font-semibold">
                           {mismatch.metro_stock_qty.toLocaleString()}

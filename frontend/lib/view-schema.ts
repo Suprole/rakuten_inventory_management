@@ -42,8 +42,8 @@ export const ItemMetricSchema = z.object({
 export const ItemMetricsSchema = z.array(ItemMetricSchema);
 
 export const MirrorMismatchSchema = z.object({
-  rakuten_item_no: z.string(),
-  rakuten_sku: z.string(),
+  internal_id: z.string(),
+  name: z.string(),
   metro_stock_qty: z.number(),
   windy_stock_qty: z.number(),
   diff: z.number(),
