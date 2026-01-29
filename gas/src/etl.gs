@@ -204,14 +204,34 @@ function runEtlOnce() {
     }
   }
 
+  // 在庫（derived_stock）の考え方：
+  // - metro在庫を採用（windyは監視用）
+  // - ただし「同じ社内IDが複数SKUにまたがる」ケースで合算すると二重計上になり得るため、
+  //   qty=1 のBOMが存在するSKUを「代表」とみなし、そのSKU在庫 = 社内ID在庫 とする。
+  // - qty=1 の代表が無い社内IDは、従来どおり stock_qty * qty の合算にフォールバックする。
+  var anchorStockByInternal = {}; // internal_id -> stock_qty (qty=1 のSKU在庫)
+  var fallbackStockByInternal = {}; // internal_id -> Σ(stock_qty * qty)
   for (var listingStockId in metroData.stockByListing) {
     var stock_qty = metroData.stockByListing[listingStockId] || 0;
     var bomRows = bomByListing[listingStockId];
     if (!bomRows) continue; // 未マッピングSKUは別途対応（任意）
     for (var i = 0; i < bomRows.length; i++) {
       var b = bomRows[i];
-      derivedStock[b.internal_id] = (derivedStock[b.internal_id] || 0) + stock_qty * b.qty;
+      // フォールバック用（従来挙動）
+      fallbackStockByInternal[b.internal_id] = (fallbackStockByInternal[b.internal_id] || 0) + stock_qty * b.qty;
+      // 代表SKU（qty=1）がある場合は、その在庫を採用する
+      // qty=1 が複数ある場合は、値が一致している前提だが、事故時に過小評価しないよう最大値を採用
+      if (b.qty === 1) {
+        if (anchorStockByInternal[b.internal_id] === undefined || stock_qty > anchorStockByInternal[b.internal_id]) {
+          anchorStockByInternal[b.internal_id] = stock_qty;
+        }
+      }
     }
+  }
+  // derivedStock を確定（代表があれば代表、なければフォールバック）
+  derivedStock = fallbackStockByInternal;
+  for (var internalIdForAnchor in anchorStockByInternal) {
+    derivedStock[internalIdForAnchor] = anchorStockByInternal[internalIdForAnchor];
   }
 
   for (var listingSalesId in metroData.salesByListing) {
