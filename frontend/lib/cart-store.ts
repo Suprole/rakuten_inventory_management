@@ -22,6 +22,7 @@ const CART_STORAGE_KEY = 'po_cart_v1';
 type Listener = () => void;
 const listeners = new Set<Listener>();
 let storageListenerReady = false;
+let cachedCart: Cart | null = null;
 
 function nowMs() {
   return Date.now();
@@ -108,6 +109,16 @@ function ensureStorageListener() {
   if (typeof window === 'undefined') return;
   window.addEventListener('storage', (e) => {
     if (e.key !== CART_STORAGE_KEY) return;
+    // 他タブ更新を反映（snapshot参照を更新してからnotify）
+    try {
+      if (typeof e.newValue === 'string' && e.newValue) {
+        cachedCart = normalizeCart(JSON.parse(e.newValue) as unknown);
+      } else {
+        cachedCart = defaultCart();
+      }
+    } catch {
+      cachedCart = defaultCart();
+    }
     notify();
   });
 }
@@ -121,7 +132,10 @@ export function subscribe(listener: Listener) {
 }
 
 export function getSnapshot(): Cart {
-  return readLocalStorageCart();
+  // useSyncExternalStoreの要件: store変更がない限り同一参照を返す（無限ループ防止）
+  if (cachedCart) return cachedCart;
+  cachedCart = readLocalStorageCart();
+  return cachedCart;
 }
 
 export function getServerSnapshot(): Cart {
@@ -129,10 +143,11 @@ export function getServerSnapshot(): Cart {
 }
 
 function commit(mutator: (prev: Cart) => Cart): Cart {
-  const prev = readLocalStorageCart();
+  const prev = getSnapshot();
   const next0 = mutator(prev);
   const next: Cart = { ...next0, updated_at: nowMs() };
   writeLocalStorageCart(next);
+  cachedCart = next;
   notify();
   return next;
 }
