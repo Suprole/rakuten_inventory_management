@@ -203,8 +203,8 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Link href="/po/new" className="flex-1">
-                  <Button variant="default" className="w-full">発注作成</Button>
+                <Link href="/po/cart" className="flex-1">
+                  <Button variant="default" className="w-full">発注カート</Button>
                 </Link>
                 <Link href="/po" className="flex-1">
                   <Button variant="outline" className="w-full bg-transparent">発注一覧</Button>

@@ -17,4 +17,3 @@
 ## ドキュメント
 
 - 運用手順：`docs/ops.md`
-- デプロイ（Vercel）：`docs/deploy-vercel.md`

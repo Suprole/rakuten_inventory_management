@@ -1,6 +1,8 @@
 import {
   PoCreatePayloadSchema,
   PoCreateResponseSchema,
+  PoConfirmPayloadSchema,
+  PoConfirmResponseSchema,
   PoDeletePayloadSchema,
   PoDeleteResponseSchema,
   PoDetailResponseSchema,
@@ -8,6 +10,7 @@ import {
   PoUpdateStatusPayloadSchema,
   PoUpdateStatusResponseSchema,
   type PoCreatePayload,
+  type PoConfirmPayload,
 } from './po-schema';
 
 async function parseJson(res: Response): Promise<unknown> {
@@ -72,6 +75,28 @@ export async function createPo(payload: PoCreatePayload) {
   }
   if (!parsed.data.ok) throw new Error(parsed.data.message || parsed.data.error);
   return parsed.data.po_id;
+}
+
+export async function confirmPo(payload: PoConfirmPayload) {
+  const input = PoConfirmPayloadSchema.safeParse(payload);
+  if (!input.success) throw new Error(`確定リクエストが不正です: ${input.error.message}`);
+
+  const res = await fetch('/api/po/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input.data),
+  });
+  const json = await parseJson(res);
+  if (!res.ok) {
+    console.error('[po-client] /api/po/confirm http_error', { status: res.status, json });
+  }
+  const parsed = PoConfirmResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    console.error('[po-client] /api/po/confirm schema_error', { error: parsed.error.message, json });
+    throw new Error(`PO確定の形式が不正です: ${parsed.error.message}`);
+  }
+  // ok:false（mail_failed含む）も呼び出し側で扱うため、そのまま返す
+  return parsed.data;
 }
 
 export async function updatePoStatus(payload: { po_id: string; status: 'draft' | 'sent' | 'cancelled' }) {

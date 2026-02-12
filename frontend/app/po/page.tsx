@@ -75,10 +75,10 @@ export default function POListPage() {
               発注の作成・管理・ステータス確認
             </p>
           </div>
-          <Link href="/po/new">
+          <Link href="/po/cart">
             <Button size="lg">
               <Plus className="mr-2 h-4 w-4" />
-              新規発注作成
+              発注カート
             </Button>
           </Link>
         </div>

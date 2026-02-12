@@ -40,6 +40,11 @@ function handleApi(method, e) {
       if (e && e.postData && e.postData.contents) body = JSON.parse(e.postData.contents);
       return jsonResponse(200, poCreate_(body));
     }
+    if (method === 'POST' && path === '/po/confirm') {
+      var bodyConfirm = {};
+      if (e && e.postData && e.postData.contents) bodyConfirm = JSON.parse(e.postData.contents);
+      return jsonResponse(200, poConfirm_(bodyConfirm));
+    }
     if (method === 'POST' && path === '/po/update_status') {
       var body2 = {};
       if (e && e.postData && e.postData.contents) body2 = JSON.parse(e.postData.contents);

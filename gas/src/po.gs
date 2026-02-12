@@ -139,6 +139,66 @@ function poCreate_(payload) {
   }
 }
 
+/**
+ * 発注確定（作成+メール送信+成功時のみsent化）
+ * - 要件: メール送信に失敗した場合は draft のまま残す
+ * - 返却: 成功時 {ok:true, po_id, status:'sent'}
+ *         失敗時 {ok:false, error:'mail_failed', message, po_id, status:'draft'}
+ */
+function poConfirm_(payload) {
+  if (!payload || !payload.lines || !payload.lines.length) throw new Error('lines is required');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30 * 1000);
+  try {
+    // 1) draft作成（poCreate_と同等）
+    var po_id = generatePoId_();
+    var created_at = nowIsoJst_();
+    var status = 'draft';
+
+    appendRow_('po_header', ['po_id', 'created_at', 'status', 'supplier', 'note'], {
+      po_id: po_id,
+      created_at: created_at,
+      status: status,
+      supplier: payload.supplier || '',
+      note: payload.note || '',
+    });
+
+    for (var i = 0; i < payload.lines.length; i++) {
+      var line = payload.lines[i];
+      if (!line || !line.internal_id) throw new Error('line.internal_id is required');
+      var line_no = i + 1;
+      appendRow_('po_lines', ['po_id', 'line_no', 'internal_id', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'], {
+        po_id: po_id,
+        line_no: line_no,
+        internal_id: line.internal_id,
+        qty: Number(line.qty || 0),
+        unit_cost: line.unit_cost !== undefined ? Number(line.unit_cost) : '',
+        basis_need_qty: line.basis_need_qty !== undefined ? Number(line.basis_need_qty) : '',
+        basis_days_of_cover: line.basis_days_of_cover !== undefined ? Number(line.basis_days_of_cover) : '',
+      });
+    }
+
+    // 2) メール送信
+    try {
+      sendPoEmailOnSent_(po_id);
+    } catch (mailErr) {
+      var msg = mailErr && mailErr.message ? mailErr.message : String(mailErr);
+      Logger.log('[poConfirm_] mail failed: ' + msg);
+      // draftのまま返す（POは作成済み）
+      return { ok: false, error: 'mail_failed', message: msg, po_id: po_id, status: 'draft' };
+    }
+
+    // 3) 成功時のみ sent に更新
+    var ok = updateRowWhere_('po_header', 'po_id', po_id, { status: 'sent' });
+    if (!ok) throw new Error('failed to set sent status: ' + po_id);
+
+    return { ok: true, po_id: po_id, status: 'sent' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function poList_() {
   var t = readTable_('po_header');
   requireCols(t.header, ['po_id', 'created_at', 'status', 'supplier', 'note'], 'po_header');
@@ -235,33 +295,32 @@ function poUpdateStatus_(poId, status) {
     var headerT = readTable_('po_header');
     requireCols(headerT.header, ['po_id', 'status', 'supplier', 'note', 'created_at'], 'po_header');
     var currentStatus = null;
-    var headerRow = null;
     for (var i = 0; i < headerT.rows.length; i++) {
       var r = headerT.rows[i];
       if (toStringSafe(r[headerT.header['po_id']]) === toStringSafe(poId)) {
         currentStatus = toStringSafe(r[headerT.header['status']]);
-        headerRow = r;
         break;
       }
     }
     if (currentStatus === null) return { ok: false, error: 'not_found' };
 
-    var ok = updateRowWhere_('po_header', 'po_id', poId, { status: status });
-    if (!ok) return { ok: false, error: 'not_found' };
-
-    // draft/cancelled → sent のときだけメール送信
+    // draft/cancelled → sent のときだけメール送信（要件：失敗時はdraftのまま）
     if (status === 'sent' && currentStatus !== 'sent') {
       try {
         sendPoEmailOnSent_(poId);
       } catch (mailErr) {
-        // 発注ステータス更新は成功させるが、メール送信失敗はログに残す
         var msg = mailErr && mailErr.message ? mailErr.message : String(mailErr);
         Logger.log('[poUpdateStatus_] mail failed: ' + msg);
-        return { ok: true, mail_sent: false, mail_error: msg };
+        // ステータスは更新しない（draft維持）
+        return { ok: false, error: 'mail_failed', message: msg };
       }
+      var okSent = updateRowWhere_('po_header', 'po_id', poId, { status: 'sent' });
+      if (!okSent) return { ok: false, error: 'not_found' };
       return { ok: true, mail_sent: true };
     }
 
+    var ok = updateRowWhere_('po_header', 'po_id', poId, { status: status });
+    if (!ok) return { ok: false, error: 'not_found' };
     return { ok: true };
   } finally {
     lock.releaseLock();

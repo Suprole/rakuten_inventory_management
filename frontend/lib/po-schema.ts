@@ -91,6 +91,26 @@ export const PoUpdateStatusResponseSchema = z.union([
   ApiErrorSchema,
 ]);
 
+export const PoConfirmPayloadSchema = PoCreatePayloadSchema;
+
+export const PoConfirmOkSchema = z.object({
+  ok: z.literal(true),
+  po_id: z.string(),
+  status: z.literal('sent'),
+});
+export const PoConfirmMailFailedSchema = z.object({
+  ok: z.literal(false),
+  error: z.literal('mail_failed'),
+  message: z.string().optional(),
+  po_id: z.string(),
+  status: z.literal('draft'),
+});
+export const PoConfirmResponseSchema = z.union([
+  PoConfirmOkSchema,
+  PoConfirmMailFailedSchema,
+  ApiErrorSchema,
+]);
+
 export const PoDeletePayloadSchema = z.object({
   po_id: z.string(),
 });
@@ -116,4 +136,5 @@ export type POStatus = z.infer<typeof POStatusSchema>;
 export type POHeader = z.infer<typeof POHeaderSchema>;
 export type POLine = z.infer<typeof POLineSchema>;
 export type PoCreatePayload = z.infer<typeof PoCreatePayloadSchema>;
+export type PoConfirmPayload = z.infer<typeof PoConfirmPayloadSchema>;
 

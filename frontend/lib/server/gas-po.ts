@@ -55,7 +55,7 @@ async function gasFetch<T>(params: {
   return json as T;
 }
 
-import { PoDetailResponseSchema, PoListResponseSchema, PoCreatePayloadSchema, PoCreateResponseSchema, PoUpdateStatusPayloadSchema, PoUpdateStatusResponseSchema, PoDeletePayloadSchema, PoDeleteResponseSchema } from '@/lib/po-schema';
+import { PoDetailResponseSchema, PoListResponseSchema, PoCreatePayloadSchema, PoCreateResponseSchema, PoConfirmPayloadSchema, PoConfirmResponseSchema, PoUpdateStatusPayloadSchema, PoUpdateStatusResponseSchema, PoDeletePayloadSchema, PoDeleteResponseSchema } from '@/lib/po-schema';
 
 export async function poList(): Promise<unknown> {
   const json = await gasFetch<unknown>({ path: '/po/list', method: 'GET' });
@@ -87,6 +87,25 @@ export async function poCreate(payload: {
   const json = await gasFetch<unknown>({ path: '/po/create', method: 'POST', body: input.data });
   const parsed = PoCreateResponseSchema.safeParse(json);
   if (!parsed.success) throw new Error(`GAS po/create の形式が不正です: ${parsed.error.message}`);
+  return parsed.data;
+}
+
+export async function poConfirm(payload: {
+  supplier?: string;
+  note?: string;
+  lines: Array<{
+    internal_id: string;
+    qty: number;
+    unit_cost?: number;
+    basis_need_qty?: number;
+    basis_days_of_cover?: number;
+  }>;
+}): Promise<unknown> {
+  const input = PoConfirmPayloadSchema.safeParse(payload);
+  if (!input.success) throw new Error(`po/confirm の入力が不正です: ${input.error.message}`);
+  const json = await gasFetch<unknown>({ path: '/po/confirm', method: 'POST', body: input.data });
+  const parsed = PoConfirmResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error(`GAS po/confirm の形式が不正です: ${parsed.error.message}`);
   return parsed.data;
 }
 

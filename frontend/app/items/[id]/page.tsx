@@ -24,17 +24,21 @@ import {
   TrendingUp,
   AlertCircle,
   Store,
+  ShoppingCart,
+  Plus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useParams } from 'next/navigation';
 import { useItemMetrics } from '@/lib/use-view';
+import { useCart } from '@/lib/use-cart';
 
 export default function ItemDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const itemMetricsState = useItemMetrics();
+  const cart = useCart();
   const items = itemMetricsState.data ?? [];
   const item =
     items.find((i) => i.internal_id === id);
@@ -253,13 +257,47 @@ export default function ItemDetailPage() {
                   </p>
                 </div>
               )}
-              {item.reorder_qty_suggested > 0 && (
-                <Link href={`/po/new?query=${encodeURIComponent(item.internal_id)}`} className="block">
-                  <Button className="w-full" size="lg">
-                    この商品を発注する
-                  </Button>
-                </Link>
-              )}
+              <div className="grid gap-2 sm:grid-cols-2">
+                {cart.lines.some((l) => l.internal_id === item.internal_id) ? (
+                  <Link href="/po/cart" className="block sm:col-span-2">
+                    <Button className="w-full" size="lg">
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      カートへ
+                    </Button>
+                  </Link>
+                ) : (
+                  <>
+                    <Button
+                      className="w-full"
+                      size="lg"
+                      onClick={() => {
+                        const qty =
+                          item.reorder_qty_suggested > 0
+                            ? item.reorder_qty_suggested
+                            : item.lot_size;
+                        cart.actions.addToCart({
+                          internal_id: item.internal_id,
+                          name: item.name,
+                          qty,
+                          unit_cost: item.default_unit_cost ?? 0,
+                          lot_size: item.lot_size,
+                          basis_need_qty: item.need_qty,
+                          basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
+                        });
+                      }}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      カートに追加
+                    </Button>
+                    <Link href="/po/cart" className="block">
+                      <Button variant="outline" className="w-full bg-transparent" size="lg">
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        カートを見る
+                      </Button>
+                    </Link>
+                  </>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>

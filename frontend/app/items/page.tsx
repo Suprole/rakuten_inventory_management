@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, ArrowUpDown, Package } from 'lucide-react';
+import { Search, ArrowUpDown, Package, ShoppingCart, Plus } from 'lucide-react';
 import { type ItemMetric } from '@/lib/view-schema';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -29,6 +29,7 @@ import { Suspense } from 'react';
 import Loading from './loading';
 import { useItemMetrics } from '@/lib/use-view';
 import { useDebouncedValue } from '@/lib/use-debounced';
+import { useCart } from '@/lib/use-cart';
 
 type SortField = 'name' | 'derived_stock' | 'days_of_cover' | 'reorder_qty_suggested';
 type SortDirection = 'asc' | 'desc';
@@ -69,6 +70,12 @@ export default function ItemsPage() {
   const itemMetricsState = useItemMetrics();
   const itemMetrics = useMemo(() => itemMetricsState.data ?? [], [itemMetricsState.data]);
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
+  const cart = useCart();
+  const lines = cart.lines;
+  const isInCart = useMemo(() => {
+    const set = new Set(lines.map((l) => l.internal_id));
+    return (internalId: string) => set.has(internalId);
+  }, [lines]);
 
   // URLクエリ同期（検索はdebounce、フィルタ/ソートは即時）
   useEffect(() => {
@@ -184,14 +191,29 @@ export default function ItemsPage() {
       <div className="min-h-screen bg-background">
         <Navigation />
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="mb-6">
-            <h1 className="flex items-center gap-2 text-3xl font-bold text-foreground">
-              <Package className="h-8 w-8" />
-              在庫一覧
-            </h1>
-            <p className="mt-2 text-muted-foreground">
-              社内ID単位での在庫状況・需要予測・発注推奨
-            </p>
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="flex items-center gap-2 text-3xl font-bold text-foreground">
+                <Package className="h-8 w-8" />
+                在庫一覧
+              </h1>
+              <p className="mt-2 text-muted-foreground">
+                社内ID単位での在庫状況・需要予測・発注推奨
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="bg-transparent"
+              onClick={() => router.push('/po/cart')}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              カート
+              {cart.lineCount > 0 && (
+                <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                  {cart.lineCount}
+                </span>
+              )}
+            </Button>
           </div>
 
           <Card className="mb-6">
@@ -294,12 +316,13 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
+                      <TableHead className="w-[120px] font-semibold">カート</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {itemMetricsState.status === 'loading' ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-24 text-center">
+                        <TableCell colSpan={11} className="h-24 text-center">
                           <p className="text-muted-foreground">読み込み中...</p>
                         </TableCell>
                       </TableRow>
@@ -353,11 +376,54 @@ export default function ItemsPage() {
                               <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
+                          <TableCell>
+                            {isInCart(item.internal_id) ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-transparent"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  router.push('/po/cart');
+                                }}
+                              >
+                                <ShoppingCart className="mr-2 h-4 w-4" />
+                                カートへ
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-transparent"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const qty =
+                                    item.reorder_qty_suggested > 0
+                                      ? item.reorder_qty_suggested
+                                      : item.lot_size;
+                                  cart.actions.addToCart({
+                                    internal_id: item.internal_id,
+                                    name: item.name,
+                                    qty,
+                                    unit_cost: item.default_unit_cost ?? 0,
+                                    lot_size: item.lot_size,
+                                    basis_need_qty: item.need_qty,
+                                    basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
+                                  });
+                                }}
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                追加
+                              </Button>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-24 text-center">
+                        <TableCell colSpan={11} className="h-24 text-center">
                           <p className="text-muted-foreground">
                             該当する商品が見つかりませんでした
                           </p>
@@ -411,6 +477,49 @@ export default function ItemsPage() {
                               </span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isInCart(item.internal_id) ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-transparent"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  router.push('/po/cart');
+                                }}
+                              >
+                                <ShoppingCart className="mr-2 h-4 w-4" />
+                                カートへ
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-transparent"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const qty =
+                                    item.reorder_qty_suggested > 0
+                                      ? item.reorder_qty_suggested
+                                      : item.lot_size;
+                                  cart.actions.addToCart({
+                                    internal_id: item.internal_id,
+                                    name: item.name,
+                                    qty,
+                                    unit_cost: item.default_unit_cost ?? 0,
+                                    lot_size: item.lot_size,
+                                    basis_need_qty: item.need_qty,
+                                    basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
+                                  });
+                                }}
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                追加
+                              </Button>
                             )}
                           </TableCell>
                         </TableRow>

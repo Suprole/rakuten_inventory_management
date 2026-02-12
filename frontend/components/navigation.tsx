@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Package, ShoppingCart, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Package, ShoppingCart, AlertTriangle, AlertCircle, FileText } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
+import { useCart } from '@/lib/use-cart';
 
 const navItems = [
   {
@@ -14,9 +15,14 @@ const navItems = [
     icon: Package,
   },
   {
+    title: 'カート',
+    href: '/po/cart',
+    icon: ShoppingCart,
+  },
+  {
     title: '発注管理',
     href: '/po',
-    icon: ShoppingCart,
+    icon: FileText,
   },
   {
     title: 'ミラーずれ監視',
@@ -34,6 +40,7 @@ export function Navigation() {
   const pathname = usePathname();
   const session = useSession();
   const email = session.data?.user?.email || '';
+  const cart = useCart();
 
   return (
     <nav className="border-b border-border bg-card">
@@ -65,6 +72,11 @@ export function Navigation() {
                   >
                     <Icon className="h-4 w-4" />
                     {item.title}
+                    {item.href === '/po/cart' && cart.lineCount > 0 && (
+                      <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                        {cart.lineCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
