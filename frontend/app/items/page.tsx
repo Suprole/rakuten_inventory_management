@@ -286,7 +286,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[120px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[96px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('derived_stock')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -294,12 +294,12 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="w-[120px] text-right font-semibold">metro先月</TableHead>
-                      <TableHead className="w-[120px] text-right font-semibold">metro今月</TableHead>
-                      <TableHead className="w-[120px] text-right font-semibold">windy先月</TableHead>
-                      <TableHead className="w-[120px] text-right font-semibold">windy今月</TableHead>
+                      <TableHead className="w-[96px] text-right font-semibold">metro先月</TableHead>
+                      <TableHead className="w-[96px] text-right font-semibold">metro今月</TableHead>
+                      <TableHead className="w-[96px] text-right font-semibold">windy先月</TableHead>
+                      <TableHead className="w-[96px] text-right font-semibold">windy今月</TableHead>
                       <TableHead
-                        className="w-[120px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('days_of_cover')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -308,7 +308,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[120px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('reorder_qty_suggested')}
                       >
                         <div className="flex items-center justify-end gap-1">
