@@ -31,10 +31,23 @@ import { useItemMetrics } from '@/lib/use-view';
 import { useDebouncedValue } from '@/lib/use-debounced';
 import { useCart } from '@/lib/use-cart';
 
-type SortField = 'name' | 'derived_stock' | 'days_of_cover' | 'reorder_qty_suggested';
+type SortField =
+  | 'name'
+  | 'derived_stock'
+  | 'sales_last_month'
+  | 'sales_this_month'
+  | 'days_of_cover'
+  | 'reorder_qty_suggested';
 type SortDirection = 'asc' | 'desc';
 
-const SORT_FIELDS: SortField[] = ['name', 'derived_stock', 'days_of_cover', 'reorder_qty_suggested'];
+const SORT_FIELDS: SortField[] = [
+  'name',
+  'derived_stock',
+  'sales_last_month',
+  'sales_this_month',
+  'days_of_cover',
+  'reorder_qty_suggested',
+];
 
 function parseSortField(v: string | null): SortField {
   return (v && SORT_FIELDS.includes(v as SortField) ? (v as SortField) : 'days_of_cover');
@@ -125,6 +138,18 @@ export default function ItemsPage() {
             return item.name;
           case 'derived_stock':
             return item.derived_stock;
+          case 'sales_last_month': {
+            const m = item.metro_last_month_sales ?? 0;
+            const w = item.windy_last_month_sales ?? 0;
+            const y = item.yahoo_last_month_sales ?? 0;
+            return m + w + y;
+          }
+          case 'sales_this_month': {
+            const m = item.metro_this_month_sales ?? 0;
+            const w = item.windy_this_month_sales ?? 0;
+            const y = item.yahoo_this_month_sales ?? 0;
+            return m + w + y;
+          }
           case 'days_of_cover':
             return item.avg_daily_consumption === 0 ? Infinity : item.days_of_cover ?? 0;
           case 'reorder_qty_suggested':
@@ -322,8 +347,26 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="w-[160px] text-right font-semibold">売上（先月）</TableHead>
-                      <TableHead className="w-[160px] text-right font-semibold">売上（今月）</TableHead>
+                      <TableHead
+                        className="w-[160px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        onClick={() => handleSort('sales_last_month')}
+                        title="（metro+windy+yahoo）合計でソート"
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          売上（先月）
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      <TableHead
+                        className="w-[160px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        onClick={() => handleSort('sales_this_month')}
+                        title="（metro+windy+yahoo）合計でソート"
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          売上（今月）
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
                       <TableHead
                         className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('days_of_cover')}
