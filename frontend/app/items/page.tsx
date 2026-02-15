@@ -186,6 +186,34 @@ export default function ItemsPage() {
     return v.toLocaleString();
   };
 
+  const SalesInline = ({
+    metro,
+    windy,
+    yahoo,
+  }: {
+    metro: number | null | undefined;
+    windy: number | null | undefined;
+    yahoo: number | null | undefined;
+  }) => {
+    // 省スペース表示（M/W/Y を常時表示）
+    return (
+      <div className="flex justify-end gap-2 whitespace-nowrap font-mono text-xs tabular-nums">
+        <span>
+          <span className="text-muted-foreground">M</span>
+          {formatSales(metro)}
+        </span>
+        <span>
+          <span className="text-muted-foreground">W</span>
+          {formatSales(windy)}
+        </span>
+        <span>
+          <span className="text-muted-foreground">Y</span>
+          {formatSales(yahoo)}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <Suspense fallback={<Loading />}>
       <div className="min-h-screen bg-background">
@@ -294,12 +322,8 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="w-[96px] text-right font-semibold">metro先月</TableHead>
-                      <TableHead className="w-[96px] text-right font-semibold">metro今月</TableHead>
-                      <TableHead className="w-[96px] text-right font-semibold">windy先月</TableHead>
-                      <TableHead className="w-[96px] text-right font-semibold">windy今月</TableHead>
-                      <TableHead className="w-[96px] text-right font-semibold">yahoo先月</TableHead>
-                      <TableHead className="w-[96px] text-right font-semibold">yahoo今月</TableHead>
+                      <TableHead className="w-[160px] text-right font-semibold">売上（先月）</TableHead>
+                      <TableHead className="w-[160px] text-right font-semibold">売上（今月）</TableHead>
                       <TableHead
                         className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('days_of_cover')}
@@ -324,7 +348,7 @@ export default function ItemsPage() {
                   <TableBody>
                     {itemMetricsState.status === 'loading' ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="h-24 text-center">
+                        <TableCell colSpan={9} className="h-24 text-center">
                           <p className="text-muted-foreground">読み込み中...</p>
                         </TableCell>
                       </TableRow>
@@ -355,12 +379,20 @@ export default function ItemsPage() {
                           <TableCell className="text-right font-mono">
                             {item.derived_stock.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.metro_last_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.metro_this_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.windy_last_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.windy_this_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.yahoo_last_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.yahoo_this_month_sales)}</TableCell>
+                          <TableCell className="text-right">
+                            <SalesInline
+                              metro={item.metro_last_month_sales}
+                              windy={item.windy_last_month_sales}
+                              yahoo={item.yahoo_last_month_sales}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <SalesInline
+                              metro={item.metro_this_month_sales}
+                              windy={item.windy_this_month_sales}
+                              yahoo={item.yahoo_this_month_sales}
+                            />
+                          </TableCell>
                           <TableCell className="text-right font-mono">
                             <span
                               className={cn(
@@ -427,7 +459,7 @@ export default function ItemsPage() {
                       ))
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="h-24 text-center">
+                        <TableCell colSpan={9} className="h-24 text-center">
                           <p className="text-muted-foreground">
                             該当する商品が見つかりませんでした
                           </p>
@@ -460,12 +492,20 @@ export default function ItemsPage() {
                           <TableCell className="text-right font-mono">
                             {item.derived_stock.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.metro_last_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.metro_this_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.windy_last_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.windy_this_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.yahoo_last_month_sales)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatSales(item.yahoo_this_month_sales)}</TableCell>
+                          <TableCell className="text-right">
+                            <SalesInline
+                              metro={item.metro_last_month_sales}
+                              windy={item.windy_last_month_sales}
+                              yahoo={item.yahoo_last_month_sales}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <SalesInline
+                              metro={item.metro_this_month_sales}
+                              windy={item.windy_this_month_sales}
+                              yahoo={item.yahoo_this_month_sales}
+                            />
+                          </TableCell>
                           <TableCell className="text-right font-mono">
                             <span
                               className={cn(
