@@ -17,6 +17,16 @@ export const ListingMetricSchema = z.object({
   contribution_consumption: z.number(),
 });
 
+export const YahooListingMetricSchema = z.object({
+  yahoo_listing_id: z.string(),
+  item_code: z.string(),
+  sub_code: z.string(),
+  name: z.string(),
+  last_month_sales: z.number(),
+  this_month_sales: z.number(),
+  bom_qty: z.number(),
+});
+
 export const ItemMetricSchema = z.object({
   internal_id: z.string(),
   name: z.string(),
@@ -39,6 +49,7 @@ export const ItemMetricSchema = z.object({
   risk_level: RiskLevelSchema,
   default_unit_cost: z.number().optional(),
   listings: z.array(ListingMetricSchema).optional(), // 任意（listing内訳を出す場合）
+  yahoo_listings: z.array(YahooListingMetricSchema).optional(),
 });
 
 export const ItemMetricsSchema = z.array(ItemMetricSchema);

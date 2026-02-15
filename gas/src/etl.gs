@@ -151,6 +151,35 @@ function readYahooBom_(itemsMap) {
   return out;
 }
 
+function readYahooListings_() {
+  // yahoo_listing_id -> { item_code, sub_code, name, active }
+  // NOTE: 導入途中を許容する（タブが無い/ヘッダが違う等はwarnして空で返す）
+  try {
+    var values = readActiveSpreadsheetSheetValues('yahoo_listings');
+    if (values.length < 2) return {};
+    var header = indexHeader(values[0]);
+    requireCols(header, ['yahoo_listing_id', 'item_code', 'sub_code', 'name', 'active'], 'yahoo_listings');
+
+    var out = {};
+    for (var i = 1; i < values.length; i++) {
+      var row = values[i];
+      var id = toStringSafe(row[header['yahoo_listing_id']]);
+      if (!id) continue;
+      out[id] = {
+        yahoo_listing_id: id,
+        item_code: toStringSafe(row[header['item_code']]),
+        sub_code: toStringSafe(row[header['sub_code']]),
+        name: toStringSafe(row[header['name']]),
+        active: toBooleanSafe(row[header['active']]),
+      };
+    }
+    return out;
+  } catch (e) {
+    Logger.log('[warn] yahoo_listings read failed: ' + (e && e.message ? e.message : String(e)));
+    return {};
+  }
+}
+
 function readYahooItemReportSalesByListing_(sheetName) {
   // ストアクリエイター「商品別レポートCSV」を貼り付けるタブ（yahoo_item_report_lm/cm）を想定
   // 返却: yahoo_listing_id -> salesQty（注文点数合計）
@@ -262,6 +291,7 @@ function runEtlOnce() {
   var listingHandling = readListingHandling_();
   var bomByListing = readBom_(itemsMap);
   var yahooBomByListing = readYahooBom_(itemsMap);
+  var yahooListingsMap = readYahooListings_();
 
   // 3) 店舗別データ
   var metroData = readRakutenSheet_(sources.metro);
@@ -309,6 +339,7 @@ function runEtlOnce() {
   var derivedStock = {};
   var avgCons = {};
   var bomByInternal = {};
+  var yahooBomByInternal = {};
   // store別 売上（社内ID単位、BOM展開後）
   var metroSalesLmByInternal = {};
   var metroSalesCmByInternal = {};
@@ -323,6 +354,17 @@ function runEtlOnce() {
       var br = rowsForListing[bidx];
       if (!bomByInternal[br.internal_id]) bomByInternal[br.internal_id] = [];
       bomByInternal[br.internal_id].push({ listing_id: br.listing_id, qty: br.qty });
+    }
+  }
+
+  // Yahoo BOMも internal_id → yahoo_listing で逆引き（詳細画面のYahoo商品別表示に利用）
+  for (var yahooListingIdForBom in yahooBomByListing) {
+    var yRows = yahooBomByListing[yahooListingIdForBom];
+    if (!yRows) continue;
+    for (var yb = 0; yb < yRows.length; yb++) {
+      var yr = yRows[yb];
+      if (!yahooBomByInternal[yr.internal_id]) yahooBomByInternal[yr.internal_id] = [];
+      yahooBomByInternal[yr.internal_id].push({ yahoo_listing_id: yr.yahoo_listing_id, qty: yr.qty });
     }
   }
 
@@ -463,6 +505,47 @@ function runEtlOnce() {
       risk_level: risk,
       default_unit_cost: item.default_unit_cost,
       listings: listings,
+      // 詳細画面用：Yahoo商品別（先月/今月）
+      yahoo_listings: (function () {
+        var out = [];
+        var yrefs = yahooBomByInternal[internal_id] || [];
+        for (var yi = 0; yi < yrefs.length; yi++) {
+          var ref = yrefs[yi];
+          var yid = toStringSafe(ref.yahoo_listing_id);
+          if (!yid) continue;
+          var lmQty = yahooLmByListing[yid] || 0;
+          var cmQty = yahooCmByListing[yid] || 0;
+
+          // 表示名などは yahoo_listings → item_reportメタ → yahoo_listing_id分解 の順に補完
+          var meta = yahooListingsMap[yid] || yahooLmMetaByListing[yid] || yahooCmMetaByListing[yid] || {};
+          var itemCode = meta.item_code ? String(meta.item_code) : '';
+          var subCode = meta.sub_code ? String(meta.sub_code) : '';
+          var name2 = meta.name ? String(meta.name) : '';
+          if (!itemCode || !subCode) {
+            var p = String(yid).split('|');
+            itemCode = itemCode || (p.length >= 1 ? p[0] : '');
+            subCode = subCode || (p.length >= 2 ? p.slice(1).join('|') : '');
+          }
+
+          out.push({
+            yahoo_listing_id: yid,
+            item_code: itemCode,
+            sub_code: subCode,
+            name: name2,
+            last_month_sales: lmQty,
+            this_month_sales: cmQty,
+            bom_qty: ref.qty || 0,
+          });
+        }
+        // 売上があるものを優先して見やすく
+        out.sort(function (a, b) {
+          var as = (a.this_month_sales || 0) + (a.last_month_sales || 0);
+          var bs = (b.this_month_sales || 0) + (b.last_month_sales || 0);
+          if (as !== bs) return bs - as;
+          return String(a.yahoo_listing_id).localeCompare(String(b.yahoo_listing_id));
+        });
+        return out.length ? out : undefined;
+      })(),
     });
   }
 

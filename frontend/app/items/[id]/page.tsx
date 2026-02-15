@@ -416,6 +416,53 @@ export default function ItemDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Yahoo 商品別 消費（先月/今月） */}
+        {item.yahoo_listings && item.yahoo_listings.length > 0 && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Store className="h-5 w-5" />
+                Yahoo 商品別 消費（先月/今月）
+              </CardTitle>
+              <CardDescription>
+                Yahooの商品コード×サブコードごとの売上個数（先月・今月）
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>商品コード</TableHead>
+                      <TableHead>サブコード</TableHead>
+                      <TableHead>商品名</TableHead>
+                      <TableHead className="text-right">先月消費</TableHead>
+                      <TableHead className="text-right">今月消費</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {item.yahoo_listings.map((y) => (
+                      <TableRow key={y.yahoo_listing_id}>
+                        <TableCell className="font-mono text-sm">{y.item_code}</TableCell>
+                        <TableCell className="font-mono text-sm">{y.sub_code || '-'}</TableCell>
+                        <TableCell className="max-w-[420px] truncate" title={y.name || ''}>
+                          {y.name || '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {y.last_month_sales.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {y.this_month_sales.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );
