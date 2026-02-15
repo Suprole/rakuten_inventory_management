@@ -202,6 +202,57 @@ export default function ItemDetailPage() {
             </CardContent>
           </Card>
 
+          {/* 売上（先月/今月）カード */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Store className="h-5 w-5" />
+                売上（先月/今月）
+              </CardTitle>
+              <CardDescription>社内ID単位の売上個数（BOM展開後）</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>チャネル</TableHead>
+                      <TableHead className="text-right">先月</TableHead>
+                      <TableHead className="text-right">今月</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>
+                        <Badge variant="outline" className="border-primary text-primary">
+                          metro
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{(item.metro_last_month_sales ?? 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-mono">{(item.metro_this_month_sales ?? 0).toLocaleString()}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>
+                        <Badge variant="outline" className="border-chart-2 text-chart-2">
+                          windy
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{(item.windy_last_month_sales ?? 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-mono">{(item.windy_this_month_sales ?? 0).toLocaleString()}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>
+                        <Badge variant="outline">yahoo</Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{(item.yahoo_last_month_sales ?? 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-mono">{(item.yahoo_this_month_sales ?? 0).toLocaleString()}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 発注推奨カード */}
           <Card>
             <CardHeader>

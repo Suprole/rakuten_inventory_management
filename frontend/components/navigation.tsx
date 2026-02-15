@@ -34,6 +34,11 @@ const navItems = [
     href: '/monitor/bom-unmapped',
     icon: AlertCircle,
   },
+  {
+    title: 'Yahoo未紐付け監視',
+    href: '/monitor/yahoo-bom-unmapped',
+    icon: AlertCircle,
+  },
 ];
 
 export function Navigation() {

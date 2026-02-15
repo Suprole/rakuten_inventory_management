@@ -12,6 +12,12 @@ function validateSheetsSchema() {
     { name: 'listings', required: ['listing_id', 'store_id', 'rakuten_item_no', 'rakuten_sku', 'active'] },
     { name: 'listing_handling', required: ['listing_id', 'handling_status'] },
     { name: 'bom', required: ['listing_id', 'internal_id', 'qty'] },
+    // Yahoo（CSVインポート）系
+    { name: 'yahoo_listings', required: ['yahoo_listing_id', 'item_code', 'sub_code', 'active'] },
+    { name: 'yahoo_bom', required: ['yahoo_listing_id', 'internal_id', 'qty'] },
+    // CSV貼り付けタブ（ヘッダが正しいことを保証する。データ行は0でもOK）
+    { name: 'yahoo_item_report_lm', required: ['商品コード', 'サブコード', '注文点数合計'] },
+    { name: 'yahoo_item_report_cm', required: ['商品コード', 'サブコード', '注文点数合計'] },
     { name: 'po_header', required: ['po_id', 'created_at', 'status', 'supplier', 'note'] },
     { name: 'po_lines', required: ['po_id', 'line_no', 'internal_id', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'] },
   ];

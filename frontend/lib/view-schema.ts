@@ -28,6 +28,8 @@ export const ItemMetricSchema = z.object({
   metro_this_month_sales: z.number().optional(),
   windy_last_month_sales: z.number().optional(),
   windy_this_month_sales: z.number().optional(),
+  yahoo_last_month_sales: z.number().optional(),
+  yahoo_this_month_sales: z.number().optional(),
   lead_time_days: z.number(),
   safety_stock: z.number(),
   lot_size: z.number(),
@@ -65,6 +67,17 @@ export const UnmappedListingSchema = z.object({
 
 export const UnmappedListingsSchema = z.array(UnmappedListingSchema);
 
+export const YahooUnmappedListingSchema = z.object({
+  yahoo_listing_id: z.string(),
+  item_code: z.string().optional(),
+  sub_code: z.string().optional(),
+  name: z.string().optional(),
+  last_month_sales: z.number(),
+  this_month_sales: z.number(),
+});
+
+export const YahooUnmappedListingsSchema = z.array(YahooUnmappedListingSchema);
+
 export const ListingSnapshotSchema = z.object({
   store_id: z.enum(['metro', 'windy']),
   listing_id: z.string(),
@@ -80,5 +93,6 @@ export const ListingSnapshotsSchema = z.array(ListingSnapshotSchema);
 export type ItemMetric = z.infer<typeof ItemMetricSchema>;
 export type MirrorMismatch = z.infer<typeof MirrorMismatchSchema>;
 export type UnmappedListing = z.infer<typeof UnmappedListingSchema>;
+export type YahooUnmappedListing = z.infer<typeof YahooUnmappedListingSchema>;
 export type ListingSnapshot = z.infer<typeof ListingSnapshotSchema>;
 

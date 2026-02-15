@@ -298,6 +298,8 @@ export default function ItemsPage() {
                       <TableHead className="w-[96px] text-right font-semibold">metro今月</TableHead>
                       <TableHead className="w-[96px] text-right font-semibold">windy先月</TableHead>
                       <TableHead className="w-[96px] text-right font-semibold">windy今月</TableHead>
+                      <TableHead className="w-[96px] text-right font-semibold">yahoo先月</TableHead>
+                      <TableHead className="w-[96px] text-right font-semibold">yahoo今月</TableHead>
                       <TableHead
                         className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('days_of_cover')}
@@ -322,7 +324,7 @@ export default function ItemsPage() {
                   <TableBody>
                     {itemMetricsState.status === 'loading' ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="h-24 text-center">
+                        <TableCell colSpan={13} className="h-24 text-center">
                           <p className="text-muted-foreground">読み込み中...</p>
                         </TableCell>
                       </TableRow>
@@ -357,6 +359,8 @@ export default function ItemsPage() {
                           <TableCell className="text-right font-mono">{formatSales(item.metro_this_month_sales)}</TableCell>
                           <TableCell className="text-right font-mono">{formatSales(item.windy_last_month_sales)}</TableCell>
                           <TableCell className="text-right font-mono">{formatSales(item.windy_this_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.yahoo_last_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.yahoo_this_month_sales)}</TableCell>
                           <TableCell className="text-right font-mono">
                             <span
                               className={cn(
@@ -423,7 +427,7 @@ export default function ItemsPage() {
                       ))
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="h-24 text-center">
+                        <TableCell colSpan={13} className="h-24 text-center">
                           <p className="text-muted-foreground">
                             該当する商品が見つかりませんでした
                           </p>
@@ -460,6 +464,8 @@ export default function ItemsPage() {
                           <TableCell className="text-right font-mono">{formatSales(item.metro_this_month_sales)}</TableCell>
                           <TableCell className="text-right font-mono">{formatSales(item.windy_last_month_sales)}</TableCell>
                           <TableCell className="text-right font-mono">{formatSales(item.windy_this_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.yahoo_last_month_sales)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatSales(item.yahoo_this_month_sales)}</TableCell>
                           <TableCell className="text-right font-mono">
                             <span
                               className={cn(

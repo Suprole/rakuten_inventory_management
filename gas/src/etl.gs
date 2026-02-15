@@ -118,6 +118,105 @@ function readBom_(itemsMap) {
   return out;
 }
 
+function makeYahooListingId_(itemCode, subCode) {
+  // Yahooのコードは大文字小文字が揺れるため、小文字に寄せて突合する
+  var ic = toStringSafe(itemCode).toLowerCase();
+  var sc = toStringSafe(subCode).toLowerCase();
+  // サブコードが無いケースは商品コードのみをキーにする
+  return sc ? ic + '|' + sc : ic;
+}
+
+function readYahooBom_(itemsMap) {
+  // yahoo_listing_id -> [{ internal_id, qty }]
+  var values = readActiveSpreadsheetSheetValues('yahoo_bom');
+  if (values.length < 2) return {}; // 未整備でもETL自体は動かす（yahoo売上は0扱い）
+  var header = indexHeader(values[0]);
+  requireCols(header, ['yahoo_listing_id', 'internal_id', 'qty'], 'yahoo_bom');
+
+  var out = {};
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var yahoo_listing_id = toStringSafe(row[header['yahoo_listing_id']]);
+    var internal_id = toStringSafe(row[header['internal_id']]);
+    var qty = toNumberSafeWarn(
+      row[header['qty']],
+      'yahoo_bom row=' + (i + 1) + ' yahoo_listing_id=' + yahoo_listing_id + ' internal_id=' + internal_id + ' col=qty'
+    );
+    if (!yahoo_listing_id || !internal_id) continue;
+    if (!itemsMap[internal_id]) throw new Error('yahoo_bom references unknown internal_id: ' + internal_id);
+    if (qty <= 0) throw new Error('yahoo_bom qty must be > 0: yahoo_listing_id=' + yahoo_listing_id + ', internal_id=' + internal_id);
+    if (!out[yahoo_listing_id]) out[yahoo_listing_id] = [];
+    out[yahoo_listing_id].push({ yahoo_listing_id: yahoo_listing_id, internal_id: internal_id, qty: qty });
+  }
+  return out;
+}
+
+function readYahooItemReportSalesByListing_(sheetName) {
+  // ストアクリエイター「商品別レポートCSV」を貼り付けるタブ（yahoo_item_report_lm/cm）を想定
+  // 返却: yahoo_listing_id -> salesQty（注文点数合計）
+  var values = readActiveSpreadsheetSheetValues(sheetName);
+  if (!values.length) return {};
+  if (values.length < 2) return {}; // ヘッダのみ
+  var header = indexHeader(values[0]);
+  requireCols(header, ['商品コード', 'サブコード', '注文点数合計'], sheetName);
+
+  var out = {};
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var itemCode = toStringSafe(row[header['商品コード']]);
+    var subCode = toStringSafe(row[header['サブコード']]);
+    if (!itemCode) continue;
+    var yahoo_listing_id = makeYahooListingId_(itemCode, subCode);
+    var qty = toNumberSafeWarn(row[header['注文点数合計']], sheetName + ' row=' + (i + 1) + ' item_code=' + itemCode + ' sub_code=' + subCode + ' col=注文点数合計');
+    out[yahoo_listing_id] = (out[yahoo_listing_id] || 0) + qty;
+  }
+  return out;
+}
+
+function readYahooItemReportMetaByListing_(sheetName) {
+  // yahoo_listing_id -> { item_code, sub_code, name }
+  // NOTE: 数値集計は別関数で行う（ここでは未マッピング一覧に表示するためのメタ情報だけ）
+  var values = readActiveSpreadsheetSheetValues(sheetName);
+  if (!values.length) return {};
+  if (values.length < 2) return {};
+  var header = indexHeader(values[0]);
+  requireCols(header, ['商品名', '商品コード', 'サブコード'], sheetName);
+
+  var out = {};
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var name = toStringSafe(row[header['商品名']]);
+    var itemCode = toStringSafe(row[header['商品コード']]);
+    var subCode = toStringSafe(row[header['サブコード']]);
+    if (!itemCode) continue;
+    var yahoo_listing_id = makeYahooListingId_(itemCode, subCode);
+    if (!out[yahoo_listing_id]) {
+      out[yahoo_listing_id] = { item_code: itemCode, sub_code: subCode, name: name };
+    } else if (!out[yahoo_listing_id].name && name) {
+      // 空欄を補完
+      out[yahoo_listing_id].name = name;
+    }
+  }
+  return out;
+}
+
+function aggregateYahooSalesToInternal_(salesByYahooListing, yahooBomByListing) {
+  // internal_id -> salesQty
+  var out = {};
+  if (!salesByYahooListing) return out;
+  for (var yahoo_listing_id in salesByYahooListing) {
+    var qty = salesByYahooListing[yahoo_listing_id] || 0;
+    if (qty === 0) continue;
+    var refs = yahooBomByListing ? yahooBomByListing[yahoo_listing_id] : null;
+    if (!refs || !refs.length) continue; // 未マッピングは0扱い（別途監視するなら追加）
+    for (var i = 0; i < refs.length; i++) {
+      var r = refs[i];
+      out[r.internal_id] = (out[r.internal_id] || 0) + qty * (r.qty || 0);
+    }
+  }
+  return out;
+}
+
 function readRakutenSheet_(cfg) {
   var values = readSheetValues(cfg.spreadsheet_id, cfg.sheet_name);
   if (values.length < 2) throw new Error('rakuten sheet is empty: ' + cfg.store_id);
@@ -162,10 +261,33 @@ function runEtlOnce() {
   var listingsMap = readListings_();
   var listingHandling = readListingHandling_();
   var bomByListing = readBom_(itemsMap);
+  var yahooBomByListing = readYahooBom_(itemsMap);
 
   // 3) 店舗別データ
   var metroData = readRakutenSheet_(sources.metro);
   var windyData = readRakutenSheet_(sources.windy);
+
+  // 3.5) Yahoo（CSVインポート）売上（先月/今月）
+  // - yahoo_item_report_lm/cm に貼られた「商品別レポート」から、注文点数合計を売上個数として採用
+  var yahooLmByListing = {};
+  var yahooCmByListing = {};
+  var yahooLmMetaByListing = {};
+  var yahooCmMetaByListing = {};
+  try {
+    yahooLmByListing = readYahooItemReportSalesByListing_('yahoo_item_report_lm');
+    yahooCmByListing = readYahooItemReportSalesByListing_('yahoo_item_report_cm');
+    yahooLmMetaByListing = readYahooItemReportMetaByListing_('yahoo_item_report_lm');
+    yahooCmMetaByListing = readYahooItemReportMetaByListing_('yahoo_item_report_cm');
+  } catch (eYahoo) {
+    // Yahooタブが未作成/ヘッダ違いの場合でも、楽天側のETLは止めない（導入途中を許容）
+    Logger.log('[warn] yahoo item report read failed: ' + (eYahoo && eYahoo.message ? eYahoo.message : String(eYahoo)));
+    yahooLmByListing = {};
+    yahooCmByListing = {};
+    yahooLmMetaByListing = {};
+    yahooCmMetaByListing = {};
+  }
+  var yahooSalesLmByInternal = aggregateYahooSalesToInternal_(yahooLmByListing, yahooBomByListing);
+  var yahooSalesCmByInternal = aggregateYahooSalesToInternal_(yahooCmByListing, yahooBomByListing);
 
   // 4) 日付（需要推定）
   var today = getJstToday();
@@ -330,6 +452,8 @@ function runEtlOnce() {
       metro_this_month_sales: metroSalesCmByInternal[internal_id] || 0,
       windy_last_month_sales: windySalesLmByInternal[internal_id] || 0,
       windy_this_month_sales: windySalesCmByInternal[internal_id] || 0,
+      yahoo_last_month_sales: yahooSalesLmByInternal[internal_id] || 0,
+      yahoo_this_month_sales: yahooSalesCmByInternal[internal_id] || 0,
       lead_time_days: lead,
       safety_stock: safety,
       lot_size: lot,
@@ -448,6 +572,37 @@ function runEtlOnce() {
   collectSnapshots_('metro', metroData.stockByListing, metroData.salesByListing);
   collectSnapshots_('windy', windyData.stockByListing, windyData.salesByListing);
 
+  // 11) Yahoo 未マッピング（yahoo_bom未登録）を抽出
+  // - Yahooは在庫を扱わないため、売上（注文点数合計）があるものを優先して出す
+  var yahooUnmappedListings = [];
+  var yahooKeys = {};
+  for (var y1 in yahooLmByListing) yahooKeys[y1] = true;
+  for (var y2 in yahooCmByListing) yahooKeys[y2] = true;
+  for (var yid in yahooKeys) {
+    if (yahooBomByListing && yahooBomByListing[yid]) continue; // BOMあり
+    var lmQty = yahooLmByListing[yid] || 0;
+    var cmQty = yahooCmByListing[yid] || 0;
+    // 0のみはノイズが多いので出さない（必要なら後で切替可能）
+    if (lmQty + cmQty === 0) continue;
+
+    // メタは先月→今月の順で補完
+    var meta = (yahooLmMetaByListing && yahooLmMetaByListing[yid]) || (yahooCmMetaByListing && yahooCmMetaByListing[yid]) || {};
+    yahooUnmappedListings.push({
+      yahoo_listing_id: yid,
+      item_code: meta.item_code || '',
+      sub_code: meta.sub_code || '',
+      name: meta.name || '',
+      last_month_sales: lmQty,
+      this_month_sales: cmQty,
+    });
+  }
+  yahooUnmappedListings.sort(function (a, b) {
+    var aSales = (a.last_month_sales || 0) + (a.this_month_sales || 0);
+    var bSales = (b.last_month_sales || 0) + (b.this_month_sales || 0);
+    if (aSales !== bSales) return bSales - aSales;
+    return String(a.yahoo_listing_id).localeCompare(String(b.yahoo_listing_id));
+  });
+
   Logger.log(
     JSON.stringify({
       ok: true,
@@ -457,10 +612,17 @@ function runEtlOnce() {
       mirrorMismatches: mirrorMismatches.length,
       unmappedListings: unmappedListings.length,
       listingSnapshots: listingSnapshots.length,
+      yahooUnmappedListings: yahooUnmappedListings.length,
       ms: Date.now() - started,
     })
   );
 
-  return { itemMetrics: itemMetrics, mirrorMismatches: mirrorMismatches, unmappedListings: unmappedListings, listingSnapshots: listingSnapshots };
+  return {
+    itemMetrics: itemMetrics,
+    mirrorMismatches: mirrorMismatches,
+    unmappedListings: unmappedListings,
+    listingSnapshots: listingSnapshots,
+    yahooUnmappedListings: yahooUnmappedListings,
+  };
 }
 

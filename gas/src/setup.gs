@@ -45,6 +45,39 @@ function setupMasterSpreadsheet() {
   ]);
   createOrResetHeader_(ss, 'bom', ['listing_id', 'internal_id', 'qty']);
 
+  // Yahoo（CSVインポート）系
+  // - Yahoo側の「商品コード|サブコード」を listing 相当のキーとして正規化し、BOMで internal_id に紐付ける
+  // - ストアクリエイターの「商品別レポートCSV」を、そのまま貼れるようにインポート用タブを用意
+  createOrResetHeader_(ss, 'yahoo_listings', [
+    'yahoo_listing_id', // 推奨：商品コード + '|' + サブコード（サブコード無しの場合は商品コード）
+    'item_code', // 商品コード
+    'sub_code', // サブコード（オプション等）
+    'name', // 商品名（任意：CSVから転記しても良い）
+    'active',
+  ]);
+  createOrResetHeader_(ss, 'yahoo_bom', ['yahoo_listing_id', 'internal_id', 'qty']);
+
+  // Yahoo「商品別レポート」CSVのヘッダ（2026-02 時点の例）
+  // NOTE: ETLはこのうち「商品コード」「サブコード」「注文点数合計」を必須として参照する
+  var yahooItemReportHeaders = [
+    '商品名',
+    '商品コード',
+    'サブコード',
+    '売上合計値（税込）',
+    '注文数合計',
+    '注文点数合計',
+    '注文者数合計',
+    '平均購買率',
+    'お気に入り保存数',
+    'カート投入数',
+    'ページビュー（優良配送あり）',
+    'ページビュー（優良配送なし）',
+    '訪問者数',
+    '貢献度（カテゴリ）',
+  ];
+  createOrResetHeader_(ss, 'yahoo_item_report_lm', yahooItemReportHeaders); // 先月分
+  createOrResetHeader_(ss, 'yahoo_item_report_cm', yahooItemReportHeaders); // 今月分（途中）
+
   // 発注タブ（後続のPO実装で使う。先に枠だけ作る）
   createOrResetHeader_(ss, 'po_header', ['po_id', 'created_at', 'status', 'supplier', 'note']);
   createOrResetHeader_(ss, 'po_lines', [
@@ -100,6 +133,363 @@ function setupRakutenDataSheet(spreadsheetId, sheetName) {
   sheet.autoResizeColumns(1, headers.length);
 
   Logger.log('[setupRakutenDataSheet] done: ' + ss.getUrl() + ' #' + name);
+}
+
+/**
+ * Yahoo商品バックアップCSV（daily_item_backup.csv）から yahoo_listings を作成/更新
+ *
+ * 使い方：
+ * 1) `yahoo_listings` タブに daily_item_backup.csv を「そのまま」インポート（上書き）
+ *    - 期待ヘッダ例: code, sub-code, name, display
+ * 2) Apps Scriptでこの関数を実行
+ * 3) `yahoo_listings` タブが正規化される（yahoo_listing_id,item_code,sub_code,name,active）
+ *
+ * 注意：
+ * - 実行すると `yahoo_listings` タブの内容は「正規化テーブル」で上書きされます（CSVは残りません）
+ * - ヘッダが既に正規化済みの場合は何もしません
+ */
+function syncYahooListingsFromDailyItemBackupCsv() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('yahoo_listings');
+  if (!sheet) throw new Error('yahoo_listings sheet not found');
+
+  var values = sheet.getDataRange().getValues();
+  if (!values.length) throw new Error('yahoo_listings is empty (no header)');
+  if (values.length < 2) throw new Error('yahoo_listings is empty (no data rows)');
+
+  var header = indexHeader(values[0]);
+
+  // 既に正規化済みなら何もしない
+  var normalizedCols = ['yahoo_listing_id', 'item_code', 'sub_code', 'name', 'active'];
+  var isNormalized = true;
+  for (var nc = 0; nc < normalizedCols.length; nc++) {
+    if (header[normalizedCols[nc]] === undefined) {
+      isNormalized = false;
+      break;
+    }
+  }
+  if (isNormalized) {
+    Logger.log('[syncYahooListingsFromDailyItemBackupCsv] yahoo_listings already normalized. skip');
+    return { ok: true, skipped: true };
+  }
+
+  // raw CSV mode（daily_item_backup.csvのヘッダ）
+  // 必須：code / sub-code / name
+  requireCols(header, ['code', 'sub-code', 'name'], 'yahoo_listings(raw daily_item_backup.csv)');
+  var codeIdx = header['code'];
+  var subIdx = header['sub-code'];
+  var nameIdx = header['name'];
+  var displayIdx = header['display']; // 任意（無ければ全件true扱い）
+
+  function normCode__(s) {
+    // Yahooのコードは item_report / item_backup で大文字小文字が揺れるため、突合しやすいよう小文字に寄せる
+    return toStringSafe(s).toLowerCase();
+  }
+
+  function extractSubCode__(raw) {
+    // sub-code の表記揺れに対応：
+    // - 通常: "2bf1063-n"
+    // - ラベル付き: "内容量:80g=2bf1063-n"
+    // ここでは「ラベルは残しつつ、実サブコード（=の右側）を返す」。
+    // ただし '=' が無い場合はそのまま返す。
+    var s = toStringSafe(raw);
+    if (!s) return '';
+    if (s.indexOf('=') < 0) return s;
+    // '=' が複数あっても最後を採用（右端が実コードになりやすい）
+    return toStringSafe(s.split('=').pop());
+  }
+
+  function extractLabel__(raw) {
+    // "内容量:80g=2bf1063-n" -> "内容量:80g"
+    var s = toStringSafe(raw);
+    if (!s) return '';
+    var idx = s.indexOf('=');
+    if (idx < 0) return '';
+    return toStringSafe(s.substring(0, idx));
+  }
+
+  function splitSubCodeParts__(rawSub) {
+    // 例:
+    // - "内容量:80g=2bf1063-n" -> ["内容量:80g=2bf1063-n"]
+    // - "カラー:黄=...&カラー:赤=..." -> ["カラー:黄=...","カラー:赤=..."]
+    var s = toStringSafe(rawSub);
+    if (!s) return [''];
+    // '&' 区切りで複数候補が入るケースに対応（Yahooのバリエーションが1セルに畳まれている）
+    var parts = s.split('&');
+    var out = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = toStringSafe(parts[i]);
+      if (!p) continue;
+      out.push(p);
+    }
+    return out.length ? out : [''];
+  }
+
+  function makeYahooListingId__(itemCode, subCode) {
+    var c = normCode__(itemCode);
+    var s = normCode__(subCode);
+    return s ? c + '|' + s : c;
+  }
+
+  // 集計（重複行があっても問題ないようにdedupe）
+  var byId = {}; // yahoo_listing_id -> { item_code, sub_code, name, active }
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    var itemCodeRaw = toStringSafe(row[codeIdx]);
+    var itemCode = normCode__(itemCodeRaw);
+    if (!itemCode) continue;
+    var subRaw = toStringSafe(row[subIdx]);
+    var nmBase = toStringSafe(row[nameIdx]);
+    var active = displayIdx !== undefined ? toBooleanSafe(row[displayIdx]) : true;
+
+    var parts = splitSubCodeParts__(subRaw);
+    for (var pi = 0; pi < parts.length; pi++) {
+      var part = parts[pi]; // "" あり得る
+      var label = extractLabel__(part);
+      var subCodeExtracted = extractSubCode__(part);
+      var subCode = normCode__(subCodeExtracted);
+
+      var yid = makeYahooListingId__(itemCode, subCode);
+      if (!yid) continue;
+
+      // name は「商品名 + (ラベル)」にして、画面/監視で判別しやすくする（任意）
+      var nm = nmBase;
+      if (label) {
+        nm = nmBase ? nmBase + '（' + label + '）' : label;
+      }
+
+      if (!byId[yid]) {
+        byId[yid] = { item_code: itemCode, sub_code: subCode, name: nm, active: active };
+      } else {
+        // 名前は空欄を補完、activeはOR（どこかで表示ならtrue）
+        if (!byId[yid].name && nm) byId[yid].name = nm;
+        byId[yid].active = byId[yid].active || active;
+      }
+    }
+  }
+
+  var rows = [];
+  for (var y in byId) {
+    var v = byId[y];
+    rows.push([y, v.item_code || '', v.sub_code || '', v.name || '', v.active !== false]);
+  }
+
+  // 安定化：item_code → sub_code → yahoo_listing_id
+  rows.sort(function (a, b) {
+    var aCode = String(a[1] || '');
+    var bCode = String(b[1] || '');
+    if (aCode < bCode) return -1;
+    if (aCode > bCode) return 1;
+    var aSub = String(a[2] || '');
+    var bSub = String(b[2] || '');
+    if (aSub < bSub) return -1;
+    if (aSub > bSub) return 1;
+    return String(a[0] || '').localeCompare(String(b[0] || ''));
+  });
+
+  // 上書き（CSVは消えて正規化テーブルになる）
+  var outHeader = ['yahoo_listing_id', 'item_code', 'sub_code', 'name', 'active'];
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, outHeader.length).setValues([outHeader]);
+  if (rows.length) {
+    sheet.getRange(2, 1, rows.length, outHeader.length).setValues(rows);
+  }
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, outHeader.length);
+
+  Logger.log('[syncYahooListingsFromDailyItemBackupCsv] done: rows=' + rows.length);
+  return { ok: true, rows: rows.length };
+}
+
+/**
+ * yahoo_listings を参照して yahoo_bom をセットアップ（半自動）
+ *
+ * 目的：
+ * - Yahooの売上（item_report）を internal_id に展開するために、yahoo_bom を「最低限の形」に整備する
+ *
+ * 使い方：
+ * 1) `items` を整備（internal_idが入っていること）
+ * 2) `yahoo_listings` を整備（syncYahooListingsFromDailyItemBackupCsv() 等）
+ * 3) この関数を実行 → `yahoo_bom` に行が無い listing を追加（可能なら internal_id を自動補完）
+ *
+ * 自動補完ルール（保守的）：
+ * - items.internal_id と yahoo_listings.sub_code が（大小文字無視で）一致 → internal_id=それ、qty=1
+ * - 一致しない場合、items.internal_id と yahoo_listings.item_code が（大小文字無視で）一致 → internal_id=それ、qty=1
+ * - それでも一致しない場合、internal_id空欄のプレースホルダ行を作る（人が後で埋める）
+ *
+ * 既存データの扱い：
+ * - 既に同じ yahoo_listing_id の bom 行がある場合は保持
+ * - ただし internal_id 空欄のプレースホルダ行があり、補完できる場合は補完する
+ */
+function syncYahooBomFromYahooListingsSemiAuto() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  function normalizeKey_(s) {
+    return toStringSafe(s).toLowerCase();
+  }
+
+  // SKU/社内id の末尾が `-N` 等の枝番を落として照合（楽天bomの半自動と同様）
+  function normalizeSuffixKey_(s) {
+    var x = toStringSafe(s);
+    if (!x) return '';
+    x = x.replace(/-[A-Za-z]$/, '');
+    return x.toLowerCase();
+  }
+
+  // items 読み込み
+  var itemsSheet = ss.getSheetByName('items');
+  if (!itemsSheet) throw new Error('items sheet not found');
+  var itemsValues = itemsSheet.getDataRange().getValues();
+  if (itemsValues.length < 2) throw new Error('items is empty');
+  var itemsHeader = indexHeader(itemsValues[0]);
+  requireCols(itemsHeader, ['internal_id'], 'items');
+
+  var internalIdByLower = {};
+  var internalIdByLowerNoSuffix = {};
+  for (var i = 1; i < itemsValues.length; i++) {
+    var row = itemsValues[i];
+    var internal_id = toStringSafe(row[itemsHeader['internal_id']]);
+    if (!internal_id) continue;
+    var k1 = internal_id.toLowerCase();
+    if (!internalIdByLower[k1]) internalIdByLower[k1] = internal_id;
+    var k2 = normalizeSuffixKey_(internal_id);
+    if (k2 && !internalIdByLowerNoSuffix[k2]) internalIdByLowerNoSuffix[k2] = internal_id;
+  }
+
+  // yahoo_listings 読み込み
+  var ylSheet = ss.getSheetByName('yahoo_listings');
+  if (!ylSheet) throw new Error('yahoo_listings sheet not found');
+  var ylValues = ylSheet.getDataRange().getValues();
+  if (ylValues.length < 2) throw new Error('yahoo_listings is empty');
+  var ylHeader = indexHeader(ylValues[0]);
+  requireCols(ylHeader, ['yahoo_listing_id', 'item_code', 'sub_code'], 'yahoo_listings');
+
+  // yahoo_bom 読み込み（ヘッダ無ければ作る）
+  var ybSheet = ss.getSheetByName('yahoo_bom');
+  if (!ybSheet) throw new Error('yahoo_bom sheet not found');
+  var ybValues = ybSheet.getDataRange().getValues();
+  if (ybValues.length < 1) ybValues = [[]];
+  var ybHeader = ybValues.length ? indexHeader(ybValues[0]) : {};
+  if (!ybHeader['yahoo_listing_id'] && ybValues.length === 1) {
+    ybHeader = { yahoo_listing_id: 0, internal_id: 1, qty: 2 };
+    ybSheet.getRange(1, 1, 1, 3).setValues([['yahoo_listing_id', 'internal_id', 'qty']]);
+  } else {
+    requireCols(ybHeader, ['yahoo_listing_id', 'internal_id', 'qty'], 'yahoo_bom');
+  }
+
+  // 既存BOMを listing_id 単位で収集
+  var existingRowsByListing = {}; // yahoo_listing_id -> array of {internal_id, qty, rawRow}
+  for (var b = 1; b < ybValues.length; b++) {
+    var r0 = ybValues[b];
+    var lid = toStringSafe(r0[ybHeader['yahoo_listing_id']]);
+    if (!lid) continue;
+    if (!existingRowsByListing[lid]) existingRowsByListing[lid] = [];
+    existingRowsByListing[lid].push({
+      internal_id: toStringSafe(r0[ybHeader['internal_id']]),
+      qty: r0[ybHeader['qty']],
+      raw: r0,
+    });
+  }
+
+  // 出力行（既存 + 追加/補完）
+  var outRows = [];
+
+  // 既存をまずコピー
+  for (var lid0 in existingRowsByListing) {
+    var arr0 = existingRowsByListing[lid0];
+    for (var k0 = 0; k0 < arr0.length; k0++) {
+      var raw0 = arr0[k0].raw;
+      outRows.push([
+        toStringSafe(raw0[ybHeader['yahoo_listing_id']]),
+        toStringSafe(raw0[ybHeader['internal_id']]),
+        raw0[ybHeader['qty']],
+      ]);
+    }
+  }
+
+  // yahoo_listings 側を走査して、存在しない yahoo_listing_id は新規作成。存在する場合はプレースホルダ補完のみ。
+  var seenListing = {};
+  for (var l = 1; l < ylValues.length; l++) {
+    var rowL = ylValues[l];
+    var yahoo_listing_id = toStringSafe(rowL[ylHeader['yahoo_listing_id']]);
+    if (!yahoo_listing_id) continue;
+    if (seenListing[yahoo_listing_id]) continue;
+    seenListing[yahoo_listing_id] = true;
+
+    var itemCode = toStringSafe(rowL[ylHeader['item_code']]);
+    var subCode = ylHeader['sub_code'] !== undefined ? toStringSafe(rowL[ylHeader['sub_code']]) : '';
+
+    // まず sub_code → internal_id で照合（大小文字無視）
+    var matchInternal = subCode ? (internalIdByLower[normalizeKey_(subCode)] || '') : '';
+    if (!matchInternal && subCode) {
+      var ksub2 = normalizeSuffixKey_(subCode);
+      matchInternal = ksub2 ? (internalIdByLowerNoSuffix[ksub2] || '') : '';
+    }
+    // sub_codeで一致しない場合のみ、item_code → internal_id で照合
+    if (!matchInternal && itemCode) {
+      matchInternal = internalIdByLower[normalizeKey_(itemCode)] || '';
+      if (!matchInternal) {
+        var kcode2 = normalizeSuffixKey_(itemCode);
+        matchInternal = kcode2 ? (internalIdByLowerNoSuffix[kcode2] || '') : '';
+      }
+    }
+
+    var existing = existingRowsByListing[yahoo_listing_id];
+    if (!existing || existing.length === 0) {
+      // 新規行を追加（matchがあればinternal_id+qty=1、無ければ空欄）
+      outRows.push([yahoo_listing_id, matchInternal || '', matchInternal ? 1 : '']);
+      continue;
+    }
+
+    // 既存がある場合：internal_id空欄行があれば補完
+    if (matchInternal) {
+      for (var e = 0; e < existing.length; e++) {
+        var ex = existing[e];
+        if (!ex.internal_id) {
+          // outRows内の該当行を探して更新（最初の空欄だけ）
+          for (var o = 0; o < outRows.length; o++) {
+            if (outRows[o][0] === yahoo_listing_id && !toStringSafe(outRows[o][1])) {
+              outRows[o][1] = matchInternal;
+              if (outRows[o][2] === '' || outRows[o][2] === null || outRows[o][2] === undefined) outRows[o][2] = 1;
+              break;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // 安定化：yahoo_listing_id → internal_id の順でソート（空欄は最後）
+  outRows.sort(function (a, b) {
+    var al = String(a[0] || '');
+    var bl = String(b[0] || '');
+    if (al < bl) return -1;
+    if (al > bl) return 1;
+    var ai = String(a[1] || '');
+    var bi = String(b[1] || '');
+    if (!ai && bi) return 1;
+    if (ai && !bi) return -1;
+    return ai.localeCompare(bi);
+  });
+
+  // 書き込み（ヘッダ固定、データは上書き）
+  var headerRow = ['yahoo_listing_id', 'internal_id', 'qty'];
+  ybSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+  if (outRows.length) {
+    ybSheet.getRange(2, 1, outRows.length, headerRow.length).setValues(outRows);
+  }
+  // 残骸行削除
+  var last = ybSheet.getLastRow();
+  var needed = 1 + outRows.length;
+  if (last > needed) {
+    ybSheet.getRange(needed + 1, 1, last - needed, headerRow.length).clearContent();
+  }
+  ybSheet.setFrozenRows(1);
+  ybSheet.autoResizeColumns(1, headerRow.length);
+
+  Logger.log('[syncYahooBomFromYahooListingsSemiAuto] done: rows=' + outRows.length);
+  return { ok: true, rows: outRows.length };
 }
 
 /**

@@ -5,6 +5,8 @@ import {
   type MirrorMismatch,
   UnmappedListingsSchema,
   type UnmappedListing,
+  YahooUnmappedListingsSchema,
+  type YahooUnmappedListing,
   ListingSnapshotsSchema,
   type ListingSnapshot,
 } from './view-schema';
@@ -37,6 +39,12 @@ export async function fetchUnmappedListings(): Promise<UnmappedListing[]> {
   const url = `/api/view/unmapped-listings`;
   const data = await fetchJson(url);
   return UnmappedListingsSchema.parse(data);
+}
+
+export async function fetchYahooUnmappedListings(): Promise<YahooUnmappedListing[]> {
+  const url = `/api/view/yahoo-unmapped-listings`;
+  const data = await fetchJson(url);
+  return YahooUnmappedListingsSchema.parse(data);
 }
 
 export async function fetchListingSnapshots(): Promise<ListingSnapshot[]> {

@@ -19,11 +19,13 @@ function runDailyEtl() {
   var mirrorJson = JSON.stringify(out.mirrorMismatches);
   var unmappedJson = JSON.stringify(out.unmappedListings || []);
   var listingSnapshotJson = JSON.stringify(out.listingSnapshots || []);
+  var yahooUnmappedJson = JSON.stringify(out.yahooUnmappedListings || []);
 
   uploadViewJson('view/item_metrics.json', itemMetricsJson);
   uploadViewJson('view/mirror_mismatch.json', mirrorJson);
   uploadViewJson('view/unmapped_listings.json', unmappedJson);
   uploadViewJson('view/listing_snapshot.json', listingSnapshotJson);
+  uploadViewJson('view/yahoo_unmapped_listings.json', yahooUnmappedJson);
 
   Logger.log(
     '[runDailyEtl] uploaded view/item_metrics.json (' +
@@ -34,6 +36,8 @@ function runDailyEtl() {
       (out.unmappedListings ? out.unmappedListings.length : 0) +
       ') and view/listing_snapshot.json (' +
       (out.listingSnapshots ? out.listingSnapshots.length : 0) +
+      ') and view/yahoo_unmapped_listings.json (' +
+      (out.yahooUnmappedListings ? out.yahooUnmappedListings.length : 0) +
       ')'
   );
 }

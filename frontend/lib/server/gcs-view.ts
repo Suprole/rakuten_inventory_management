@@ -37,6 +37,10 @@ export async function getUnmappedListingsJson(): Promise<unknown> {
   return await fetchGcsObject('view/unmapped_listings.json');
 }
 
+export async function getYahooUnmappedListingsJson(): Promise<unknown> {
+  return await fetchGcsObject('view/yahoo_unmapped_listings.json');
+}
+
 export async function getListingSnapshotJson(): Promise<unknown> {
   return await fetchGcsObject('view/listing_snapshot.json');
 }
