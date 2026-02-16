@@ -180,53 +180,108 @@ function readYahooListings_() {
   }
 }
 
-function readYahooItemReportSalesByListing_(sheetName) {
-  // ストアクリエイター「商品別レポートCSV」を貼り付けるタブ（yahoo_item_report_lm/cm）を想定
-  // 返却: yahoo_listing_id -> salesQty（注文点数合計）
+function readYahooItemReportNormalized_(sheetName) {
+  // Yahoo「商品別レポートCSV」を正規化して返す
+  //
+  // 背景：
+  // - このCSVには「サブコードあり（明細行）」と「サブコード空欄（商品コード単位の集計行）」が混在する
+  // - そのまま取り込むと、同一商品コードで二重計上になる
+  //
+  // 正規化ルール：
+  // - ある商品コードにサブコード明細が1つでも存在する場合：明細行のみ採用（集計行は捨てる）
+  // - 明細が存在しない商品コード：集計行のみ採用（キーは item_code のみ）
+  //
+  // 返却：
+  // - salesByListing: yahoo_listing_id -> 注文点数合計
+  // - metaByListing: yahoo_listing_id -> { item_code, sub_code, name }
   var values = readActiveSpreadsheetSheetValues(sheetName);
-  if (!values.length) return {};
-  if (values.length < 2) return {}; // ヘッダのみ
+  if (!values.length) return { salesByListing: {}, metaByListing: {} };
+  if (values.length < 2) return { salesByListing: {}, metaByListing: {} }; // ヘッダのみ
+
   var header = indexHeader(values[0]);
   requireCols(header, ['商品コード', 'サブコード', '注文点数合計'], sheetName);
+  var nameIdx = header['商品名']; // 任意（無い場合も許容）
 
-  var out = {};
+  function norm_(s) {
+    return toStringSafe(s).toLowerCase();
+  }
+  function isEmptySub_(s) {
+    // インポート状況により "NaN" が入ることがあるため空扱い
+    return !s || s === 'nan';
+  }
+
+  // item_code -> group
+  var byItem = {};
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
-    var itemCode = toStringSafe(row[header['商品コード']]);
-    var subCode = toStringSafe(row[header['サブコード']]);
+    var itemCode = norm_(row[header['商品コード']]);
     if (!itemCode) continue;
-    var yahoo_listing_id = makeYahooListingId_(itemCode, subCode);
-    var qty = toNumberSafeWarn(row[header['注文点数合計']], sheetName + ' row=' + (i + 1) + ' item_code=' + itemCode + ' sub_code=' + subCode + ' col=注文点数合計');
-    out[yahoo_listing_id] = (out[yahoo_listing_id] || 0) + qty;
+    var subCode = norm_(row[header['サブコード']]);
+    if (isEmptySub_(subCode)) subCode = '';
+    var qty = toNumberSafeWarn(
+      row[header['注文点数合計']],
+      sheetName + ' row=' + (i + 1) + ' item_code=' + itemCode + ' sub_code=' + subCode + ' col=注文点数合計'
+    );
+    var nm = nameIdx !== undefined ? toStringSafe(row[nameIdx]) : '';
+
+    if (!byItem[itemCode]) {
+      byItem[itemCode] = {
+        hasDetail: false,
+        detail: [], // [{ sub_code, qty, name }]
+        summaryQty: 0,
+        summaryName: '',
+      };
+    }
+    var g = byItem[itemCode];
+
+    if (subCode) {
+      g.hasDetail = true;
+      g.detail.push({ sub_code: subCode, qty: qty, name: nm });
+    } else {
+      g.summaryQty += qty;
+      if (!g.summaryName && nm) g.summaryName = nm;
+    }
   }
-  return out;
+
+  var salesByListing = {};
+  var metaByListing = {};
+
+  for (var itemCode in byItem) {
+    var g2 = byItem[itemCode];
+    if (g2.hasDetail) {
+      // 明細行のみ採用（集計行は捨てる）
+      for (var d = 0; d < g2.detail.length; d++) {
+        var dr = g2.detail[d];
+        var yid = makeYahooListingId_(itemCode, dr.sub_code);
+        salesByListing[yid] = (salesByListing[yid] || 0) + (dr.qty || 0);
+        if (!metaByListing[yid]) {
+          metaByListing[yid] = { item_code: itemCode, sub_code: dr.sub_code, name: dr.name || '' };
+        } else if (!metaByListing[yid].name && dr.name) {
+          metaByListing[yid].name = dr.name;
+        }
+      }
+    } else {
+      // 集計行のみ採用（item_code単位）
+      if (g2.summaryQty === 0 && !g2.summaryName) continue;
+      var yid2 = makeYahooListingId_(itemCode, '');
+      salesByListing[yid2] = (salesByListing[yid2] || 0) + (g2.summaryQty || 0);
+      if (!metaByListing[yid2]) {
+        metaByListing[yid2] = { item_code: itemCode, sub_code: '', name: g2.summaryName || '' };
+      } else if (!metaByListing[yid2].name && g2.summaryName) {
+        metaByListing[yid2].name = g2.summaryName;
+      }
+    }
+  }
+
+  return { salesByListing: salesByListing, metaByListing: metaByListing };
+}
+
+function readYahooItemReportSalesByListing_(sheetName) {
+  return readYahooItemReportNormalized_(sheetName).salesByListing;
 }
 
 function readYahooItemReportMetaByListing_(sheetName) {
-  // yahoo_listing_id -> { item_code, sub_code, name }
-  // NOTE: 数値集計は別関数で行う（ここでは未マッピング一覧に表示するためのメタ情報だけ）
-  var values = readActiveSpreadsheetSheetValues(sheetName);
-  if (!values.length) return {};
-  if (values.length < 2) return {};
-  var header = indexHeader(values[0]);
-  requireCols(header, ['商品名', '商品コード', 'サブコード'], sheetName);
-
-  var out = {};
-  for (var i = 1; i < values.length; i++) {
-    var row = values[i];
-    var name = toStringSafe(row[header['商品名']]);
-    var itemCode = toStringSafe(row[header['商品コード']]);
-    var subCode = toStringSafe(row[header['サブコード']]);
-    if (!itemCode) continue;
-    var yahoo_listing_id = makeYahooListingId_(itemCode, subCode);
-    if (!out[yahoo_listing_id]) {
-      out[yahoo_listing_id] = { item_code: itemCode, sub_code: subCode, name: name };
-    } else if (!out[yahoo_listing_id].name && name) {
-      // 空欄を補完
-      out[yahoo_listing_id].name = name;
-    }
-  }
-  return out;
+  return readYahooItemReportNormalized_(sheetName).metaByListing;
 }
 
 function aggregateYahooSalesToInternal_(salesByYahooListing, yahooBomByListing) {
