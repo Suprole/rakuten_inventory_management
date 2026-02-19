@@ -504,7 +504,8 @@ function runEtlOnce() {
 
     var risk = 'green';
     // 余剰（在庫日数が300日以上、または消費0で∞扱い）
-    if (days === null || days >= surplusCoverDays) {
+    // NOTE: 在庫数が0のものは「余剰」にはしない
+    if (stock > 0 && (days === null || days >= surplusCoverDays)) {
       risk = 'surplus';
     } else if (days < lead) {
       risk = 'red';
