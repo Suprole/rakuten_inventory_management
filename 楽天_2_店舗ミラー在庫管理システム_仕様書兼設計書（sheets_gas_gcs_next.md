@@ -275,6 +275,7 @@ clamp定義：
 - `surplus_cover_days = 300`（固定）
 
 判定：
+- `dormant`：`derived_stock = 0` かつ `avg_daily_consumption = 0`（在庫も消費もない）
 - `surplus`：`derived_stock > 0` かつ `days_of_cover >= surplus_cover_days`（`avg_daily_consumption = 0` の場合の `Infinity` も含む）
 - `red`：`days_of_cover < lead`
 - `yellow`：`lead <= days_of_cover < target_cover_days`

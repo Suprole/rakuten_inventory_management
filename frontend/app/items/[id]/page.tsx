@@ -85,12 +85,14 @@ export default function ItemDetailPage() {
       yellow: 'bg-warning text-warning-foreground',
       green: 'bg-success text-success-foreground',
       surplus: 'bg-surplus text-surplus-foreground',
+      dormant: 'bg-dormant text-dormant-foreground',
     };
     const labels = {
       red: '危険',
       yellow: '警告',
       green: '安全',
       surplus: '余剰',
+      dormant: '休眠',
     };
     return (
       <Badge className={cn('font-medium text-base', variants[level])}>
@@ -100,6 +102,9 @@ export default function ItemDetailPage() {
   };
 
   const formatDaysOfCover = () => {
+    if (item.derived_stock === 0) {
+      return '0.0';
+    }
     if (item.avg_daily_consumption === 0) {
       return '∞';
     }
@@ -165,7 +170,8 @@ export default function ItemDetailPage() {
                     item.risk_level === 'red' && 'text-destructive',
                     item.risk_level === 'yellow' && 'text-warning',
                     item.risk_level === 'green' && 'text-success',
-                    item.risk_level === 'surplus' && 'text-surplus'
+                    item.risk_level === 'surplus' && 'text-surplus',
+                    item.risk_level === 'dormant' && 'text-dormant'
                   )}
                 >
                   {formatDaysOfCover()}日
@@ -205,6 +211,14 @@ export default function ItemDetailPage() {
                           余剰：
                         </span>
                         在庫日数が300日以上です。過剰在庫の可能性があります（販促・在庫圧縮等を検討）。
+                      </p>
+                    )}
+                    {item.risk_level === 'dormant' && (
+                      <p>
+                        <span className="font-semibold text-dormant">
+                          休眠：
+                        </span>
+                        在庫数も消費も0です。取扱停止・未設定・季節商品などの可能性があります。
                       </p>
                     )}
                   </div>

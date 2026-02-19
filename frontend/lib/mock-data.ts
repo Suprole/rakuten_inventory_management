@@ -25,7 +25,7 @@ export interface ItemMetric {
   target_cover_days: number;
   need_qty: number;
   reorder_qty_suggested: number;
-  risk_level: 'red' | 'yellow' | 'green' | 'surplus';
+  risk_level: 'red' | 'yellow' | 'green' | 'surplus' | 'dormant';
   default_unit_cost?: number;
   listings?: ListingMetric[]; // 紐づくSKU一覧
 }
@@ -387,6 +387,37 @@ export const mockItemMetrics: ItemMetric[] = [
         bom_qty: 1,
         contribution_stock: 1200,
         contribution_consumption: 3.0,
+      },
+    ],
+  },
+  {
+    internal_id: 'ITM-001000',
+    name: '休眠テスト品（ダミー）',
+    derived_stock: 0,
+    avg_daily_consumption: 0,
+    days_of_cover: 0,
+    lead_time_days: 14,
+    safety_stock: 0,
+    lot_size: 1,
+    target_cover_days: 28,
+    need_qty: 0,
+    reorder_qty_suggested: 0,
+    risk_level: 'dormant',
+    default_unit_cost: 100,
+    listings: [
+      {
+        listing_id: 'metro|100000|SKU-Z2',
+        store_id: 'metro',
+        rakuten_item_no: '100000',
+        rakuten_sku: 'SKU-Z2',
+        title: '休眠テスト品（ダミー）',
+        stock_qty: 0,
+        last_month_sales: 0,
+        this_month_sales: 0,
+        r_hat: 0,
+        bom_qty: 1,
+        contribution_stock: 0,
+        contribution_consumption: 0,
       },
     ],
   },

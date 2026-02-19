@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const RiskLevelSchema = z.enum(['red', 'yellow', 'green', 'surplus']);
+export const RiskLevelSchema = z.enum(['red', 'yellow', 'green', 'surplus', 'dormant']);
 
 export const ListingMetricSchema = z.object({
   listing_id: z.string(),

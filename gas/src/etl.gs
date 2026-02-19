@@ -503,9 +503,13 @@ function runEtlOnce() {
     var days = cons === 0 ? null : stock / cons; // ∞はnullで表現
 
     var risk = 'green';
+    // 休眠（在庫0かつ消費0）
+    if (stock === 0 && cons === 0) {
+      risk = 'dormant';
+    }
     // 余剰（在庫日数が300日以上、または消費0で∞扱い）
     // NOTE: 在庫数が0のものは「余剰」にはしない
-    if (stock > 0 && (days === null || days >= surplusCoverDays)) {
+    else if (stock > 0 && (days === null || days >= surplusCoverDays)) {
       risk = 'surplus';
     } else if (days < lead) {
       risk = 'red';

@@ -189,12 +189,14 @@ export default function ItemsPage() {
       yellow: 'bg-warning text-warning-foreground',
       green: 'bg-success text-success-foreground',
       surplus: 'bg-surplus text-surplus-foreground',
+      dormant: 'bg-dormant text-dormant-foreground',
     };
     const labels = {
       red: '危険',
       yellow: '警告',
       green: '安全',
       surplus: '余剰',
+      dormant: '休眠',
     };
     return (
       <Badge className={cn('font-medium', variants[level])}>{labels[level]}</Badge>
@@ -202,6 +204,9 @@ export default function ItemsPage() {
   };
 
   const formatDaysOfCover = (item: ItemMetric) => {
+    if (item.derived_stock === 0) {
+      return '0.0';
+    }
     if (item.avg_daily_consumption === 0) {
       return '∞';
     }
@@ -310,6 +315,7 @@ export default function ItemsPage() {
                     <SelectItem value="yellow">警告（黄）</SelectItem>
                     <SelectItem value="green">安全（緑）</SelectItem>
                     <SelectItem value="surplus">余剰（青）</SelectItem>
+                    <SelectItem value="dormant">休眠（灰）</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -445,7 +451,8 @@ export default function ItemsPage() {
                                 item.risk_level === 'red' && 'text-destructive',
                                 item.risk_level === 'yellow' && 'text-warning',
                                 item.risk_level === 'green' && 'text-success',
-                                item.risk_level === 'surplus' && 'text-surplus'
+                                item.risk_level === 'surplus' && 'text-surplus',
+                                item.risk_level === 'dormant' && 'text-dormant'
                               )}
                             >
                               {formatDaysOfCover(item)}日
@@ -560,7 +567,8 @@ export default function ItemsPage() {
                                 item.risk_level === 'red' && 'text-destructive',
                                 item.risk_level === 'yellow' && 'text-warning',
                                 item.risk_level === 'green' && 'text-success',
-                                item.risk_level === 'surplus' && 'text-surplus'
+                                item.risk_level === 'surplus' && 'text-surplus',
+                                item.risk_level === 'dormant' && 'text-dormant'
                               )}
                             >
                               {formatDaysOfCover(item)}日

@@ -19,6 +19,7 @@ export default function HomePage() {
   const yellowItems = items.filter((item) => item.risk_level === 'yellow');
   const greenItems = items.filter((item) => item.risk_level === 'green');
   const surplusItems = items.filter((item) => item.risk_level === 'surplus');
+  const dormantItems = items.filter((item) => item.risk_level === 'dormant');
   const reorderSuggested = items.filter((item) => item.reorder_qty_suggested > 0);
 
   return (
@@ -34,7 +35,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
           <Card className="border-destructive/50 bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -99,6 +100,23 @@ export default function HomePage() {
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 在庫日数 ≥ 300日
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-dormant/50 bg-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <div className="h-2 w-2 rounded-full bg-dormant" />
+                休眠（灰）
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-dormant">
+                {itemMetricsState.status === 'loading' ? '-' : dormantItems.length}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                在庫0 / 消費0
               </p>
             </CardContent>
           </Card>
