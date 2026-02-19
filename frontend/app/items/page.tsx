@@ -188,11 +188,13 @@ export default function ItemsPage() {
       red: 'bg-destructive text-destructive-foreground',
       yellow: 'bg-warning text-warning-foreground',
       green: 'bg-success text-success-foreground',
+      surplus: 'bg-surplus text-surplus-foreground',
     };
     const labels = {
       red: '危険',
       yellow: '警告',
       green: '安全',
+      surplus: '余剰',
     };
     return (
       <Badge className={cn('font-medium', variants[level])}>{labels[level]}</Badge>
@@ -307,6 +309,7 @@ export default function ItemsPage() {
                     <SelectItem value="red">危険（赤）</SelectItem>
                     <SelectItem value="yellow">警告（黄）</SelectItem>
                     <SelectItem value="green">安全（緑）</SelectItem>
+                    <SelectItem value="surplus">余剰（青）</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -440,7 +443,9 @@ export default function ItemsPage() {
                             <span
                               className={cn(
                                 item.risk_level === 'red' && 'text-destructive',
-                                item.risk_level === 'yellow' && 'text-warning'
+                                item.risk_level === 'yellow' && 'text-warning',
+                                item.risk_level === 'green' && 'text-success',
+                                item.risk_level === 'surplus' && 'text-surplus'
                               )}
                             >
                               {formatDaysOfCover(item)}日
@@ -553,7 +558,9 @@ export default function ItemsPage() {
                             <span
                               className={cn(
                                 item.risk_level === 'red' && 'text-destructive',
-                                item.risk_level === 'yellow' && 'text-warning'
+                                item.risk_level === 'yellow' && 'text-warning',
+                                item.risk_level === 'green' && 'text-success',
+                                item.risk_level === 'surplus' && 'text-surplus'
                               )}
                             >
                               {formatDaysOfCover(item)}日

@@ -272,11 +272,13 @@ clamp定義：
 - `lead = lead_time_days`
 - `buffer = 14`（固定）
 - `target_cover_days = lead + buffer`
+- `surplus_cover_days = 300`（固定）
 
 判定：
+- `surplus`：`days_of_cover >= surplus_cover_days`（`avg_daily_consumption = 0` の場合の `Infinity` も含む）
 - `red`：`days_of_cover < lead`
 - `yellow`：`lead <= days_of_cover < target_cover_days`
-- `green`：`days_of_cover >= target_cover_days`
+- `green`：`target_cover_days <= days_of_cover < surplus_cover_days`
 
 
 ### 6.6 発注推奨数量（reorder_qty_suggested）

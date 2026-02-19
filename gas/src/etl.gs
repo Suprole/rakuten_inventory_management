@@ -487,6 +487,7 @@ function runEtlOnce() {
 
   // 7) internal指標生成
   var buffer = 14;
+  var surplusCoverDays = 300;
   var itemMetrics = [];
   for (var internal_id in itemsMap) {
     var item = itemsMap[internal_id];
@@ -502,9 +503,13 @@ function runEtlOnce() {
     var days = cons === 0 ? null : stock / cons; // ∞はnullで表現
 
     var risk = 'green';
-    if (days !== null) {
-      if (days < lead) risk = 'red';
-      else if (days < target) risk = 'yellow';
+    // 余剰（在庫日数が300日以上、または消費0で∞扱い）
+    if (days === null || days >= surplusCoverDays) {
+      risk = 'surplus';
+    } else if (days < lead) {
+      risk = 'red';
+    } else if (days < target) {
+      risk = 'yellow';
     }
 
     var need = cons * target + safety - stock;

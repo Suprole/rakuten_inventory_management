@@ -25,7 +25,7 @@ export interface ItemMetric {
   target_cover_days: number;
   need_qty: number;
   reorder_qty_suggested: number;
-  risk_level: 'red' | 'yellow' | 'green';
+  risk_level: 'red' | 'yellow' | 'green' | 'surplus';
   default_unit_cost?: number;
   listings?: ListingMetric[]; // 紐づくSKU一覧
 }
@@ -356,6 +356,37 @@ export const mockItemMetrics: ItemMetric[] = [
         bom_qty: 2,
         contribution_stock: 100,
         contribution_consumption: 1.3,
+      },
+    ],
+  },
+  {
+    internal_id: 'ITM-000999',
+    name: '在庫過多テスト品（ダミー）',
+    derived_stock: 1200,
+    avg_daily_consumption: 3.0,
+    days_of_cover: 400.0,
+    lead_time_days: 14,
+    safety_stock: 0,
+    lot_size: 1,
+    target_cover_days: 28,
+    need_qty: 0,
+    reorder_qty_suggested: 0,
+    risk_level: 'surplus',
+    default_unit_cost: 100,
+    listings: [
+      {
+        listing_id: 'metro|99999|SKU-Z1',
+        store_id: 'metro',
+        rakuten_item_no: '99999',
+        rakuten_sku: 'SKU-Z1',
+        title: '在庫過多テスト品（ダミー）',
+        stock_qty: 1200,
+        last_month_sales: 0,
+        this_month_sales: 0,
+        r_hat: 3.0,
+        bom_qty: 1,
+        contribution_stock: 1200,
+        contribution_consumption: 3.0,
       },
     ],
   },
