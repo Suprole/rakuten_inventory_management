@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, ArrowUpDown, Package, ShoppingCart, Plus } from 'lucide-react';
+import { Search, ArrowUpDown, Package, ShoppingCart, Plus, Download } from 'lucide-react';
 import { type ItemMetric } from '@/lib/view-schema';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -203,6 +203,17 @@ export default function ItemsPage() {
     );
   };
 
+  const getRiskLabel = (level: ItemMetric['risk_level']) => {
+    const labels: Record<ItemMetric['risk_level'], string> = {
+      red: '危険',
+      yellow: '警告',
+      green: '安全',
+      surplus: '余剰',
+      dormant: '休眠',
+    };
+    return labels[level];
+  };
+
   const formatDaysOfCover = (item: ItemMetric) => {
     if (item.derived_stock === 0) {
       return '0.0';
@@ -246,6 +257,67 @@ export default function ItemsPage() {
     );
   };
 
+  const downloadCsv = () => {
+    const rows: string[][] = [];
+    rows.push([
+      'リスク',
+      '社内ID',
+      '商品名',
+      '在庫数',
+      '売上（先月）M',
+      '売上（先月）W',
+      '売上（先月）Y',
+      '売上（今月）M',
+      '売上（今月）W',
+      '売上（今月）Y',
+      '在庫日数',
+      '発注推奨',
+    ]);
+
+    for (const item of filteredAndSortedItems) {
+      rows.push([
+        getRiskLabel(item.risk_level),
+        item.internal_id,
+        item.name,
+        String(item.derived_stock ?? 0),
+        String(item.metro_last_month_sales ?? 0),
+        String(item.windy_last_month_sales ?? 0),
+        String(item.yahoo_last_month_sales ?? 0),
+        String(item.metro_this_month_sales ?? 0),
+        String(item.windy_this_month_sales ?? 0),
+        String(item.yahoo_this_month_sales ?? 0),
+        String(formatDaysOfCover(item)),
+        String(item.reorder_qty_suggested ?? 0),
+      ]);
+    }
+
+    const esc = (v: string) => {
+      const s = v ?? '';
+      // CSVの標準エスケープ（" を "" にし、必要なら全体を "..." で囲む）
+      const needsQuote = /[",\r\n]/.test(s);
+      const quoted = s.replace(/"/g, '""');
+      return needsQuote ? `"${quoted}"` : quoted;
+    };
+
+    const csvBody = rows.map((r) => r.map(esc).join(',')).join('\r\n');
+    // Excel互換（UTF-8 BOM）
+    const csv = `\ufeff${csvBody}\r\n`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    const filename = `在庫一覧_${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}_${pad2(
+      now.getHours()
+    )}${pad2(now.getMinutes())}.csv`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Suspense fallback={<Loading />}>
       <div className="min-h-screen bg-background">
@@ -278,10 +350,24 @@ export default function ItemsPage() {
 
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>検索・フィルタ</CardTitle>
-              <CardDescription>
-                社内IDや商品名で検索、リスクレベルでフィルタリング
-              </CardDescription>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle>検索・フィルタ</CardTitle>
+                  <CardDescription className="mt-1">
+                    社内IDや商品名で検索、リスクレベルでフィルタリング
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  className="bg-transparent"
+                  onClick={downloadCsv}
+                  disabled={filteredAndSortedItems.length === 0 || itemMetricsState.status === 'loading'}
+                  title="現在の表示結果（フィルタ/ソート後）をCSVでダウンロード"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  CSVダウンロード
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {itemMetricsState.status === 'error' && (
