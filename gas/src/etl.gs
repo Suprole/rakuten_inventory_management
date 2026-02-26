@@ -390,6 +390,18 @@ function runEtlOnce() {
     rHatByListing[listing_id] = computeDemandRHat({ LM: sales.LM, CM: sales.CM, d: d, Dprev: Dprev });
   }
 
+  // 5.5) Yahoo listing需要推定（yahoo_listing_id単位）
+  // - Yahooは「商品別レポート」から先月/今月（当月途中）売上が取れるため、同じ推定式で日次需要を推定する
+  var rHatByYahooListing = {};
+  var allYahooListingIds = {};
+  for (var yk1 in yahooLmByListing) allYahooListingIds[yk1] = true;
+  for (var yk2 in yahooCmByListing) allYahooListingIds[yk2] = true;
+  for (var yahoo_listing_id in allYahooListingIds) {
+    var lmY = yahooLmByListing[yahoo_listing_id] || 0;
+    var cmY = yahooCmByListing[yahoo_listing_id] || 0;
+    rHatByYahooListing[yahoo_listing_id] = computeDemandRHat({ LM: lmY, CM: cmY, d: d, Dprev: Dprev });
+  }
+
   // 6) internal集計（metro固定、二重計上しない）
   var derivedStock = {};
   var avgCons = {};
@@ -460,6 +472,28 @@ function runEtlOnce() {
     for (var j = 0; j < bomRows2.length; j++) {
       var b2 = bomRows2[j];
       avgCons[b2.internal_id] = (avgCons[b2.internal_id] || 0) + rHat * b2.qty;
+    }
+  }
+
+  // windy分も日次需要（減少数）に加算（社内ID単位、BOM展開後）
+  for (var listingSalesIdW in windyData.salesByListing) {
+    var bomRows2W = bomByListing[listingSalesIdW];
+    if (!bomRows2W) continue;
+    var rHatW = rHatByListing[listingSalesIdW] || 0;
+    for (var jW = 0; jW < bomRows2W.length; jW++) {
+      var b2W = bomRows2W[jW];
+      avgCons[b2W.internal_id] = (avgCons[b2W.internal_id] || 0) + rHatW * b2W.qty;
+    }
+  }
+
+  // Yahoo分も日次需要（減少数）に加算（社内ID単位、BOM展開後）
+  for (var yListingId in rHatByYahooListing) {
+    var yRefs = yahooBomByListing ? yahooBomByListing[yListingId] : null;
+    if (!yRefs) continue;
+    var yHat = rHatByYahooListing[yListingId] || 0;
+    for (var yj = 0; yj < yRefs.length; yj++) {
+      var yb2 = yRefs[yj];
+      avgCons[yb2.internal_id] = (avgCons[yb2.internal_id] || 0) + yHat * yb2.qty;
     }
   }
 
