@@ -490,7 +490,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[96px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[96px] cursor-pointer text-right font-semibold hover:text-foreground pr-2"
                         onClick={() => handleSort('derived_stock')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -499,7 +499,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[160px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[160px] cursor-pointer text-right font-semibold hover:text-foreground pl-2 pr-2"
                         onClick={() => handleSort('sales_last_month')}
                         title="（metro+windy+yahoo）合計でソート"
                       >
@@ -509,7 +509,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[160px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[160px] cursor-pointer text-right font-semibold hover:text-foreground pl-2"
                         onClick={() => handleSort('sales_this_month')}
                         title="（metro+windy+yahoo）合計でソート"
                       >
@@ -581,17 +581,17 @@ export default function ItemsPage() {
                               {item.name}
                             </span>
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono pr-2">
                             {item.derived_stock.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right pl-2 pr-2">
                             <SalesInline
                               metro={item.metro_last_month_sales}
                               windy={item.windy_last_month_sales}
                               yahoo={item.yahoo_last_month_sales}
                             />
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right pl-2">
                             <SalesInline
                               metro={item.metro_this_month_sales}
                               windy={item.windy_this_month_sales}
@@ -708,17 +708,17 @@ export default function ItemsPage() {
                               {item.name}
                             </span>
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono pr-2">
                             {item.derived_stock.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right pl-2 pr-2">
                             <SalesInline
                               metro={item.metro_last_month_sales}
                               windy={item.windy_last_month_sales}
                               yahoo={item.yahoo_last_month_sales}
                             />
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right pl-2">
                             <SalesInline
                               metro={item.metro_this_month_sales}
                               windy={item.windy_this_month_sales}
