@@ -32,6 +32,7 @@ import { useDebouncedValue } from '@/lib/use-debounced';
 import { useCart } from '@/lib/use-cart';
 
 type SortField =
+  | 'internal_id'
   | 'name'
   | 'derived_stock'
   | 'sales_last_month'
@@ -41,6 +42,7 @@ type SortField =
 type SortDirection = 'asc' | 'desc';
 
 const SORT_FIELDS: SortField[] = [
+  'internal_id',
   'name',
   'derived_stock',
   'sales_last_month',
@@ -134,6 +136,8 @@ export default function ItemsPage() {
     items = [...items].sort((a, b) => {
       const getSortValue = (item: ItemMetric): number | string => {
         switch (sortField) {
+          case 'internal_id':
+            return item.internal_id;
           case 'name':
             return item.name;
           case 'derived_stock':
@@ -161,6 +165,13 @@ export default function ItemsPage() {
       const bVal = getSortValue(b);
 
       if (typeof aVal === 'string' && typeof bVal === 'string') {
+        // 社内IDは「A-2」「A-10」等の自然順に寄せる（必要なら数字部分を考慮）
+        if (sortField === 'internal_id') {
+          const opt: Intl.CollatorOptions = { numeric: true, sensitivity: 'base' };
+          return sortDirection === 'asc'
+            ? aVal.localeCompare(bVal, 'ja', opt)
+            : bVal.localeCompare(aVal, 'ja', opt);
+        }
         return sortDirection === 'asc'
           ? aVal.localeCompare(bVal)
           : bVal.localeCompare(aVal);
@@ -423,7 +434,15 @@ export default function ItemsPage() {
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="w-[84px] font-semibold">リスク</TableHead>
-                      <TableHead className="w-[140px] font-semibold">社内ID</TableHead>
+                      <TableHead
+                        className="w-[140px] cursor-pointer font-semibold hover:text-foreground"
+                        onClick={() => handleSort('internal_id')}
+                      >
+                        <div className="flex items-center gap-1">
+                          社内ID
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
                       <TableHead
                         className="w-[260px] cursor-pointer font-semibold hover:text-foreground"
                         onClick={() => handleSort('name')}
