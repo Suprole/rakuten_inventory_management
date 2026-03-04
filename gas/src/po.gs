@@ -481,6 +481,118 @@ function poLastSentByItem_() {
   return { ok: true, items: out };
 }
 
+/**
+ * 既存POから「最終発注（送信）」索引を再構築（今回のみのバックフィル用途）
+ *
+ * 方針：
+ * - po_header.status === 'sent' のPOだけ対象
+ * - 時刻は sent_at を優先し、無い場合は created_at を採用（過去データ救済）
+ * - 結果を po_item_last_sent（internal_id,last_sent_at,last_po_id）に上書き
+ * - ついでに po_header の sent_at が空の sent 行は created_at で埋める（列が存在する場合のみ）
+ *
+ * 使い方：
+ * - Apps Scriptエディタから手動で1回実行
+ */
+function backfillPoLastSentIndexOnce() {
+  // 1) po_header の sent_at を埋める（可能なら一括で）
+  var headerSheet = getSheetOrThrow_('po_header');
+  var headerRange = headerSheet.getDataRange();
+  var headerValues = headerRange.getValues();
+  if (!headerValues || headerValues.length < 2) {
+    Logger.log('[backfillPoLastSentIndexOnce] po_header is empty. skip');
+  } else {
+    var hh = indexHeader(headerValues[0]);
+    // sent_at 列が無い既存シートもあり得るため optional
+    if (hh['po_id'] !== undefined && hh['status'] !== undefined && hh['created_at'] !== undefined && hh['sent_at'] !== undefined) {
+      var poIdIdx = hh['po_id'];
+      var stIdx = hh['status'];
+      var createdIdx = hh['created_at'];
+      var sentIdx = hh['sent_at'];
+      var changed = 0;
+      for (var r = 1; r < headerValues.length; r++) {
+        var status = toStringSafe(headerValues[r][stIdx]);
+        if (status !== 'sent') continue;
+        var sentAt = toStringSafe(headerValues[r][sentIdx]);
+        if (sentAt) continue;
+        var createdAt = toStringSafe(headerValues[r][createdIdx]);
+        if (!createdAt) continue;
+        headerValues[r][sentIdx] = createdAt;
+        changed++;
+      }
+      if (changed > 0) {
+        headerSheet.getRange(1, 1, headerValues.length, headerValues[0].length).setValues(headerValues);
+        Logger.log('[backfillPoLastSentIndexOnce] filled sent_at from created_at: ' + changed);
+      } else {
+        Logger.log('[backfillPoLastSentIndexOnce] sent_at fill: no changes');
+      }
+    } else {
+      Logger.log('[backfillPoLastSentIndexOnce] po_header missing required cols for sent_at fill. skip');
+    }
+  }
+
+  // 2) sent POヘッダを po_id -> sent_time で引けるようにする
+  var headerT = readTable_('po_header');
+  requireCols(headerT.header, ['po_id', 'status', 'created_at'], 'po_header');
+  var hasSentAt = headerT.header['sent_at'] !== undefined;
+  var sentByPoId = {}; // po_id -> { sent_at, created_at }
+  for (var i = 0; i < headerT.rows.length; i++) {
+    var hr = headerT.rows[i];
+    var poId = toStringSafe(hr[headerT.header['po_id']]);
+    if (!poId) continue;
+    var st = toStringSafe(hr[headerT.header['status']]);
+    if (st !== 'sent') continue;
+    var createdAt2 = toStringSafe(hr[headerT.header['created_at']]);
+    var sentAt2 = hasSentAt ? toStringSafe(hr[headerT.header['sent_at']]) : '';
+    sentByPoId[poId] = { sent_at: sentAt2, created_at: createdAt2 };
+  }
+
+  // 3) po_lines を走査して internal_id -> max(sent_time) を集計
+  var linesT = readTable_('po_lines');
+  requireCols(linesT.header, ['po_id', 'internal_id'], 'po_lines');
+
+  var best = {}; // internal_id -> { t: string, po_id: string }
+  for (var j = 0; j < linesT.rows.length; j++) {
+    var lr = linesT.rows[j];
+    var poId2 = toStringSafe(lr[linesT.header['po_id']]);
+    if (!poId2) continue;
+    var hdr = sentByPoId[poId2];
+    if (!hdr) continue; // sent以外は対象外
+
+    var iid = toStringSafe(lr[linesT.header['internal_id']]);
+    if (!iid) continue;
+
+    var t = hdr.sent_at || hdr.created_at || '';
+    if (!t) continue;
+
+    var cur = best[iid];
+    if (!cur || cur.t < t) {
+      best[iid] = { t: t, po_id: poId2 };
+    }
+  }
+
+  // 4) 索引シートを上書き
+  ensurePoItemLastSentSheet_();
+  var idxSheet = getSheetOrThrow_('po_item_last_sent');
+  var rows = [];
+  for (var iid2 in best) {
+    rows.push([iid2, best[iid2].t, best[iid2].po_id]);
+  }
+  rows.sort(function (a, b) {
+    return String(a[0] || '').localeCompare(String(b[0] || ''));
+  });
+  var outHeader = ['internal_id', 'last_sent_at', 'last_po_id'];
+  idxSheet.clearContents();
+  idxSheet.getRange(1, 1, 1, outHeader.length).setValues([outHeader]);
+  if (rows.length) {
+    idxSheet.getRange(2, 1, rows.length, outHeader.length).setValues(rows);
+  }
+  idxSheet.setFrozenRows(1);
+  idxSheet.autoResizeColumns(1, outHeader.length);
+
+  Logger.log('[backfillPoLastSentIndexOnce] rebuilt po_item_last_sent rows=' + rows.length);
+  return { ok: true, rows: rows.length };
+}
+
 function getPoEmailRecipients_() {
   var raw = PropertiesService.getScriptProperties().getProperty('PO_EMAIL_RECIPIENTS') || '';
   var parts = raw.split(/[,;\s]+/);

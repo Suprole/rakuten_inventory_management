@@ -251,7 +251,7 @@ export default function ItemsPage() {
     return v.toLocaleString();
   };
 
-  const formatDateTime = (dateString: string) => {
+  const formatDateOnly = (dateString: string) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
     if (Number.isNaN(date.getTime())) return '-';
@@ -259,8 +259,6 @@ export default function ItemsPage() {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
     }).format(date);
   };
 
@@ -479,7 +477,7 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="w-[160px] font-semibold" title="最終発注（送信）日時">
+                      <TableHead className="w-[110px] font-semibold" title="最終発注（送信）日">
                         最終発注
                       </TableHead>
                       <TableHead
@@ -567,13 +565,13 @@ export default function ItemsPage() {
                           <TableCell className="font-mono text-sm">
                             {item.internal_id}
                           </TableCell>
-                          <TableCell className="text-sm">
+                          <TableCell className="whitespace-nowrap text-xs">
                             {(() => {
                               const x = lastSentByInternalId.get(item.internal_id);
                               if (!x || !x.last_sent_at) return <span className="text-muted-foreground">-</span>;
                               return (
                                 <span title={`PO: ${x.last_po_id}`}>
-                                  {formatDateTime(x.last_sent_at)}
+                                  {formatDateOnly(x.last_sent_at)}
                                 </span>
                               );
                             })()}
@@ -694,13 +692,13 @@ export default function ItemsPage() {
                           <TableCell className="font-mono text-sm">
                             {item.internal_id}
                           </TableCell>
-                          <TableCell className="text-sm">
+                          <TableCell className="whitespace-nowrap text-xs">
                             {(() => {
                               const x = lastSentByInternalId.get(item.internal_id);
                               if (!x || !x.last_sent_at) return <span className="text-muted-foreground">-</span>;
                               return (
                                 <span title={`PO: ${x.last_po_id}`}>
-                                  {formatDateTime(x.last_sent_at)}
+                                  {formatDateOnly(x.last_sent_at)}
                                 </span>
                               );
                             })()}
