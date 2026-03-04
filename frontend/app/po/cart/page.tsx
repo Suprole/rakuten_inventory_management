@@ -90,6 +90,7 @@ export default function POCartPage() {
         const poId = (res as any).po_id as string;
         cart.actions.clearCart();
         invalidateRemote('po:list');
+        invalidateRemote('po:last-sent-by-item');
         invalidateRemote(`po:detail:${poId}`);
         alert('発注を確定しました（送信済み）');
         router.push(`/po/${poId}`);

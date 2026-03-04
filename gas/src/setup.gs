@@ -79,7 +79,7 @@ function setupMasterSpreadsheet() {
   createOrResetHeader_(ss, 'yahoo_item_report_cm', yahooItemReportHeaders); // 今月分（途中）
 
   // 発注タブ（後続のPO実装で使う。先に枠だけ作る）
-  createOrResetHeader_(ss, 'po_header', ['po_id', 'created_at', 'status', 'supplier', 'note']);
+  createOrResetHeader_(ss, 'po_header', ['po_id', 'created_at', 'status', 'supplier', 'note', 'sent_at']);
   createOrResetHeader_(ss, 'po_lines', [
     'po_id',
     'line_no',
@@ -89,6 +89,8 @@ function setupMasterSpreadsheet() {
     'basis_need_qty',
     'basis_days_of_cover',
   ]);
+  // internal_id -> 最終sent索引（在庫一覧での高速参照用）
+  createOrResetHeader_(ss, 'po_item_last_sent', ['internal_id', 'last_sent_at', 'last_po_id']);
 
   // 監査ログ（任意だが推奨）
   createOrResetHeader_(ss, 'audit_log', [

@@ -30,6 +30,7 @@ import Loading from './loading';
 import { useItemMetrics } from '@/lib/use-view';
 import { useDebouncedValue } from '@/lib/use-debounced';
 import { useCart } from '@/lib/use-cart';
+import { usePoLastSentByItem } from '@/lib/use-po';
 
 type SortField =
   | 'internal_id'
@@ -86,6 +87,16 @@ export default function ItemsPage() {
   const itemMetrics = useMemo(() => itemMetricsState.data ?? [], [itemMetricsState.data]);
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
   const cart = useCart();
+  const lastSentState = usePoLastSentByItem();
+  const lastSentItems = useMemo(() => lastSentState.data ?? [], [lastSentState.data]);
+  const lastSentByInternalId = useMemo(() => {
+    const m = new Map<string, { last_sent_at: string; last_po_id: string }>();
+    for (const it of lastSentItems) {
+      if (!it.internal_id) continue;
+      m.set(it.internal_id, { last_sent_at: it.last_sent_at, last_po_id: it.last_po_id });
+    }
+    return m;
+  }, [lastSentItems]);
   const lines = cart.lines;
   const isInCart = useMemo(() => {
     const set = new Set(lines.map((l) => l.internal_id));
@@ -239,6 +250,31 @@ export default function ItemsPage() {
     if (v === null || v === undefined || Number.isNaN(v)) return '-';
     return v.toLocaleString();
   };
+
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '-';
+    return new Intl.DateTimeFormat('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  };
+
+  // 二重発注防止目的：索引は軽量なので短い間隔で再取得（画面表示中のみ）
+  useEffect(() => {
+    const intervalMs = 30_000;
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      lastSentState.refresh();
+    };
+    const id = window.setInterval(tick, intervalMs);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const SalesInline = ({
     metro,
@@ -443,6 +479,9 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
+                      <TableHead className="w-[160px] font-semibold" title="最終発注（送信）日時">
+                        最終発注
+                      </TableHead>
                       <TableHead
                         className="w-[260px] cursor-pointer font-semibold hover:text-foreground"
                         onClick={() => handleSort('name')}
@@ -505,7 +544,7 @@ export default function ItemsPage() {
                   <TableBody>
                     {itemMetricsState.status === 'loading' ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="h-24 text-center">
+                        <TableCell colSpan={10} className="h-24 text-center">
                           <p className="text-muted-foreground">読み込み中...</p>
                         </TableCell>
                       </TableRow>
@@ -527,6 +566,17 @@ export default function ItemsPage() {
                           <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
                           <TableCell className="font-mono text-sm">
                             {item.internal_id}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {(() => {
+                              const x = lastSentByInternalId.get(item.internal_id);
+                              if (!x || !x.last_sent_at) return <span className="text-muted-foreground">-</span>;
+                              return (
+                                <span title={`PO: ${x.last_po_id}`}>
+                                  {formatDateTime(x.last_sent_at)}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="font-medium">
                             <span title={item.name} className="block max-w-[260px] truncate">
@@ -619,7 +669,7 @@ export default function ItemsPage() {
                       ))
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="h-24 text-center">
+                        <TableCell colSpan={10} className="h-24 text-center">
                           <p className="text-muted-foreground">
                             該当する商品が見つかりませんでした
                           </p>
@@ -643,6 +693,17 @@ export default function ItemsPage() {
                           <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
                           <TableCell className="font-mono text-sm">
                             {item.internal_id}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {(() => {
+                              const x = lastSentByInternalId.get(item.internal_id);
+                              if (!x || !x.last_sent_at) return <span className="text-muted-foreground">-</span>;
+                              return (
+                                <span title={`PO: ${x.last_po_id}`}>
+                                  {formatDateTime(x.last_sent_at)}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="font-medium">
                             <span title={item.name} className="block max-w-[260px] truncate">

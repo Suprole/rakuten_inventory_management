@@ -55,6 +55,9 @@ function handleApi(method, e) {
       if (e && e.postData && e.postData.contents) body3 = JSON.parse(e.postData.contents);
       return jsonResponse(200, poDelete_(body3.po_id));
     }
+    if (method === 'GET' && path === '/po/last_sent_by_item') {
+      return jsonResponse(200, poLastSentByItem_());
+    }
 
     // マスタ更新（listing単位の「取り扱い不可」）
     if (method === 'POST' && path === '/master/listing_handling/upsert') {

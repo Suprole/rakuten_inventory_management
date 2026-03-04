@@ -132,6 +132,18 @@ export const PoDeleteResponseSchema = z.union([
   ApiErrorSchema,
 ]);
 
+export const PoLastSentByItemOkSchema = z.object({
+  ok: z.literal(true),
+  items: z.array(
+    z.object({
+      internal_id: z.string(),
+      last_sent_at: z.string(),
+      last_po_id: z.string(),
+    })
+  ),
+});
+export const PoLastSentByItemResponseSchema = z.union([PoLastSentByItemOkSchema, ApiErrorSchema]);
+
 export type POStatus = z.infer<typeof POStatusSchema>;
 export type POHeader = z.infer<typeof POHeaderSchema>;
 export type POLine = z.infer<typeof POLineSchema>;

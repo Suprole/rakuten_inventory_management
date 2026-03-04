@@ -6,6 +6,7 @@ import {
   PoDeletePayloadSchema,
   PoDeleteResponseSchema,
   PoDetailResponseSchema,
+  PoLastSentByItemResponseSchema,
   PoListResponseSchema,
   PoUpdateStatusPayloadSchema,
   PoUpdateStatusResponseSchema,
@@ -143,4 +144,22 @@ export async function deletePo(payload: { po_id: string }) {
     throw new Error(msg || parsed.data.error);
   }
   return parsed.data;
+}
+
+export async function fetchPoLastSentByItem() {
+  const res = await fetch('/api/po/last-sent-by-item', { cache: 'no-store' });
+  const json = await parseJson(res);
+  if (!res.ok) {
+    console.error('[po-client] /api/po/last-sent-by-item http_error', { status: res.status, json });
+  }
+  const parsed = PoLastSentByItemResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    console.error('[po-client] /api/po/last-sent-by-item schema_error', { error: parsed.error.message, json });
+    throw new Error(`最終発注（送信）情報の形式が不正です: ${parsed.error.message}`);
+  }
+  if (!parsed.data.ok) {
+    console.error('[po-client] /api/po/last-sent-by-item api_error', parsed.data);
+    throw new Error(parsed.data.message || parsed.data.error);
+  }
+  return parsed.data.items;
 }

@@ -114,6 +114,7 @@ export default function PODetailPage() {
       alert('発注を送信しました');
     }
     invalidateRemote('po:list');
+    invalidateRemote('po:last-sent-by-item');
     invalidateRemote(`po:detail:${id}`);
     detailState.refresh();
   };

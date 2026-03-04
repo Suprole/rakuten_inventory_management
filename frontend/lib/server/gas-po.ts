@@ -55,7 +55,19 @@ async function gasFetch<T>(params: {
   return json as T;
 }
 
-import { PoDetailResponseSchema, PoListResponseSchema, PoCreatePayloadSchema, PoCreateResponseSchema, PoConfirmPayloadSchema, PoConfirmResponseSchema, PoUpdateStatusPayloadSchema, PoUpdateStatusResponseSchema, PoDeletePayloadSchema, PoDeleteResponseSchema } from '@/lib/po-schema';
+import {
+  PoDetailResponseSchema,
+  PoListResponseSchema,
+  PoCreatePayloadSchema,
+  PoCreateResponseSchema,
+  PoConfirmPayloadSchema,
+  PoConfirmResponseSchema,
+  PoUpdateStatusPayloadSchema,
+  PoUpdateStatusResponseSchema,
+  PoDeletePayloadSchema,
+  PoDeleteResponseSchema,
+  PoLastSentByItemResponseSchema,
+} from '@/lib/po-schema';
 
 export async function poList(): Promise<unknown> {
   const json = await gasFetch<unknown>({ path: '/po/list', method: 'GET' });
@@ -124,5 +136,12 @@ export async function poDelete(payload: { po_id: string }): Promise<unknown> {
   const json = await gasFetch<unknown>({ path: '/po/delete', method: 'POST', body: input.data });
   const parsed = PoDeleteResponseSchema.safeParse(json);
   if (!parsed.success) throw new Error(`GAS po/delete の形式が不正です: ${parsed.error.message}`);
+  return parsed.data;
+}
+
+export async function poLastSentByItem(): Promise<unknown> {
+  const json = await gasFetch<unknown>({ path: '/po/last_sent_by_item', method: 'GET' });
+  const parsed = PoLastSentByItemResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error(`GAS po/last_sent_by_item の形式が不正です: ${parsed.error.message}`);
   return parsed.data;
 }
