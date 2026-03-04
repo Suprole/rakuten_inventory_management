@@ -285,7 +285,7 @@ export default function ItemsPage() {
   }) => {
     // 省スペース表示（M/W/Y を常時表示）
     return (
-      <div className="flex justify-end gap-2 whitespace-nowrap font-mono text-xs tabular-nums">
+      <div className="flex justify-end gap-1 whitespace-nowrap font-mono text-xs tabular-nums">
         <span>
           <span className="text-muted-foreground">M</span>
           {formatSales(metro)}
@@ -467,9 +467,9 @@ export default function ItemsPage() {
                 <Table className="table-fixed">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[84px] font-semibold">リスク</TableHead>
+                      <TableHead className="w-[76px] font-semibold">リスク</TableHead>
                       <TableHead
-                        className="w-[140px] cursor-pointer font-semibold hover:text-foreground"
+                        className="w-[132px] cursor-pointer font-semibold hover:text-foreground"
                         onClick={() => handleSort('internal_id')}
                       >
                         <div className="flex items-center gap-1">
@@ -481,7 +481,7 @@ export default function ItemsPage() {
                         最終発注
                       </TableHead>
                       <TableHead
-                        className="w-[260px] cursor-pointer font-semibold hover:text-foreground"
+                        className="w-[220px] cursor-pointer font-semibold hover:text-foreground"
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
@@ -490,7 +490,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[96px] cursor-pointer text-right font-semibold hover:text-foreground pr-2"
+                        className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground pr-2"
                         onClick={() => handleSort('derived_stock')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -499,7 +499,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[160px] cursor-pointer text-right font-semibold hover:text-foreground pl-2 pr-2"
+                        className="w-[140px] cursor-pointer text-right font-semibold hover:text-foreground pl-2 pr-2"
                         onClick={() => handleSort('sales_last_month')}
                         title="（metro+windy+yahoo）合計でソート"
                       >
@@ -509,7 +509,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[160px] cursor-pointer text-right font-semibold hover:text-foreground pl-2"
+                        className="w-[140px] cursor-pointer text-right font-semibold hover:text-foreground pl-2"
                         onClick={() => handleSort('sales_this_month')}
                         title="（metro+windy+yahoo）合計でソート"
                       >
@@ -519,7 +519,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[80px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('days_of_cover')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -528,7 +528,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="w-[80px] cursor-pointer text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('reorder_qty_suggested')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -536,7 +536,7 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="w-[120px] font-semibold">カート</TableHead>
+                      <TableHead className="w-[104px] font-semibold">カート</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -577,7 +577,7 @@ export default function ItemsPage() {
                             })()}
                           </TableCell>
                           <TableCell className="font-medium">
-                            <span title={item.name} className="block max-w-[260px] truncate">
+                            <span title={item.name} className="block max-w-[220px] truncate">
                               {item.name}
                             </span>
                           </TableCell>
@@ -704,7 +704,7 @@ export default function ItemsPage() {
                             })()}
                           </TableCell>
                           <TableCell className="font-medium">
-                            <span title={item.name} className="block max-w-[260px] truncate">
+                            <span title={item.name} className="block max-w-[220px] truncate">
                               {item.name}
                             </span>
                           </TableCell>
