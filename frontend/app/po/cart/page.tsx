@@ -206,6 +206,14 @@ export default function POCartPage() {
                         cart.lines.map((line) => {
                           const latest = itemById.get(line.internal_id);
                           const name = latest?.name || line.name || line.internal_id;
+                          const orderPack = (latest?.order_pack ?? line.order_pack ?? '').trim();
+                          const orderUnit = (latest?.order_unit ?? line.order_unit ?? '').trim();
+                          const orderAmount = (latest?.order_amount ?? line.order_amount ?? '').trim();
+                          const orderParts: string[] = [];
+                          if (orderPack) orderParts.push(`入数: ${orderPack}`);
+                          if (orderUnit) orderParts.push(`発注単位: ${orderUnit}`);
+                          if (orderAmount) orderParts.push(`発注金額: ${orderAmount}`);
+                          const orderInfo = orderParts.join(' / ');
                           return (
                             <TableRow key={line.internal_id}>
                               <TableCell className="font-mono text-sm">
@@ -213,8 +221,15 @@ export default function POCartPage() {
                                   {line.internal_id}
                                 </Link>
                               </TableCell>
-                              <TableCell className="font-medium max-w-[260px] truncate">
-                                {name}
+                              <TableCell className="max-w-[260px]">
+                                <div className="font-medium truncate" title={name}>
+                                  {name}
+                                </div>
+                                {orderInfo && (
+                                  <div className="mt-1 text-xs text-muted-foreground whitespace-normal break-words" title={orderInfo}>
+                                    {orderInfo}
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell className="text-right">
                                 <Input

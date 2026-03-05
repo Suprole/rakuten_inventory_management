@@ -4,6 +4,10 @@ export type CartLine = {
   qty: number;
   unit_cost: number;
   lot_size: number;
+  // 参照専用の発注情報（任意・文字列）
+  order_pack?: string;
+  order_unit?: string;
+  order_amount?: string;
   basis_need_qty?: number;
   basis_days_of_cover?: number;
   added_at: number; // epoch ms
@@ -60,6 +64,9 @@ function normalizeCart(raw: unknown): Cart {
     const qty0 = typeof r.qty === 'number' ? r.qty : 0;
     const qty = ceilToLot(qty0, lot_size);
     const added_at = typeof r.added_at === 'number' ? r.added_at : 0;
+    const order_pack = typeof r.order_pack === 'string' ? r.order_pack : undefined;
+    const order_unit = typeof r.order_unit === 'string' ? r.order_unit : undefined;
+    const order_amount = typeof r.order_amount === 'string' ? r.order_amount : undefined;
     const basis_need_qty = typeof r.basis_need_qty === 'number' ? r.basis_need_qty : undefined;
     const basis_days_of_cover = typeof r.basis_days_of_cover === 'number' ? r.basis_days_of_cover : undefined;
     lines.push({
@@ -68,6 +75,9 @@ function normalizeCart(raw: unknown): Cart {
       qty,
       unit_cost,
       lot_size,
+      order_pack,
+      order_unit,
+      order_amount,
       basis_need_qty,
       basis_days_of_cover,
       added_at,
@@ -170,6 +180,9 @@ export function addToCart(params: {
   qty: number;
   unit_cost: number;
   lot_size: number;
+  order_pack?: string;
+  order_unit?: string;
+  order_amount?: string;
   basis_need_qty?: number;
   basis_days_of_cover?: number;
 }): Cart {
@@ -191,6 +204,9 @@ export function addToCart(params: {
         qty,
         unit_cost,
         lot_size: incomingLot,
+        order_pack: params.order_pack,
+        order_unit: params.order_unit,
+        order_amount: params.order_amount,
         basis_need_qty: params.basis_need_qty,
         basis_days_of_cover: params.basis_days_of_cover,
         added_at: nowMs(),
@@ -206,6 +222,10 @@ export function addToCart(params: {
       name: existing.name || name,
       // 既存の編集値を優先（unit_cost, lot_size）。basisは無ければ補完。
       qty,
+      // 参照専用情報も、既存に無ければ補完（カートに入れ直し/追加時に埋められる）
+      order_pack: existing.order_pack ?? params.order_pack,
+      order_unit: existing.order_unit ?? params.order_unit,
+      order_amount: existing.order_amount ?? params.order_amount,
       basis_need_qty: existing.basis_need_qty ?? params.basis_need_qty,
       basis_days_of_cover: existing.basis_days_of_cover ?? params.basis_days_of_cover,
     };
@@ -218,7 +238,12 @@ export function addToCart(params: {
 
 export function updateLine(
   internal_id: string,
-  patch: Partial<Pick<CartLine, 'name' | 'qty' | 'unit_cost' | 'lot_size' | 'basis_need_qty' | 'basis_days_of_cover'>>
+  patch: Partial<
+    Pick<
+      CartLine,
+      'name' | 'qty' | 'unit_cost' | 'lot_size' | 'order_pack' | 'order_unit' | 'order_amount' | 'basis_need_qty' | 'basis_days_of_cover'
+    >
+  >
 ) {
   return commit((prev) => {
     const idx = prev.lines.findIndex((l) => l.internal_id === internal_id);
@@ -238,6 +263,9 @@ export function updateLine(
       unit_cost: patch.unit_cost !== undefined ? Math.max(0, Number(patch.unit_cost)) : cur.unit_cost,
       lot_size: nextLot,
       qty: nextQty,
+      order_pack: patch.order_pack !== undefined ? String(patch.order_pack) : cur.order_pack,
+      order_unit: patch.order_unit !== undefined ? String(patch.order_unit) : cur.order_unit,
+      order_amount: patch.order_amount !== undefined ? String(patch.order_amount) : cur.order_amount,
       basis_need_qty: patch.basis_need_qty !== undefined ? patch.basis_need_qty : cur.basis_need_qty,
       basis_days_of_cover: patch.basis_days_of_cover !== undefined ? patch.basis_days_of_cover : cur.basis_days_of_cover,
     };

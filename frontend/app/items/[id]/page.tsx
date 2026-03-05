@@ -357,6 +357,9 @@ export default function ItemDetailPage() {
                           qty,
                           unit_cost: item.default_unit_cost ?? 0,
                           lot_size: item.lot_size,
+                          order_pack: item.order_pack,
+                          order_unit: item.order_unit,
+                          order_amount: item.order_amount,
                           basis_need_qty: item.need_qty,
                           basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
                         });

@@ -30,6 +30,10 @@ export const YahooListingMetricSchema = z.object({
 export const ItemMetricSchema = z.object({
   internal_id: z.string(),
   name: z.string(),
+  // 発注用の参照情報（社内ID単位、任意・文字列）
+  order_pack: z.string().optional(),
+  order_unit: z.string().optional(),
+  order_amount: z.string().optional(),
   derived_stock: z.number(),
   avg_daily_consumption: z.number(),
   days_of_cover: z.number().nullable(), // ETL側で∞はnull等に正規化して出す前提

@@ -32,6 +32,10 @@ function readItems_() {
     out[internal_id] = {
       internal_id: internal_id,
       name: toStringSafe(row[header['name']]),
+      // 発注用の参照情報（任意・文字列）
+      order_pack: header['order_pack'] !== undefined ? toStringSafe(row[header['order_pack']]) : undefined,
+      order_unit: header['order_unit'] !== undefined ? toStringSafe(row[header['order_unit']]) : undefined,
+      order_amount: header['order_amount'] !== undefined ? toStringSafe(row[header['order_amount']]) : undefined,
       default_unit_cost:
         header['default_unit_cost'] !== undefined
           ? toNumberSafeWarn(row[header['default_unit_cost']], 'items row=' + (i + 1) + ' internal_id=' + internal_id + ' col=default_unit_cost')
@@ -586,6 +590,9 @@ function runEtlOnce() {
     itemMetrics.push({
       internal_id: internal_id,
       name: item.name,
+      order_pack: item.order_pack,
+      order_unit: item.order_unit,
+      order_amount: item.order_amount,
       derived_stock: stock,
       avg_daily_consumption: cons,
       days_of_cover: days,
