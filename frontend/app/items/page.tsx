@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -75,10 +76,23 @@ function matchesItemQuery(item: ItemMetric, q: string): boolean {
   return false;
 }
 
+function parseInternalIds(raw: string): string[] {
+  const s = raw.trim();
+  if (!s) return [];
+  // Excel/スプレッドシート貼り付けを想定して、タブ/改行/空白/カンマ（全角含む）を区切りにする
+  const parts = s
+    .split(/[\s\u3000,，、]+/g)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => x.toLowerCase());
+  return Array.from(new Set(parts));
+}
+
 export default function ItemsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams?.get('query') || '');
+  const [internalIdsRaw, setInternalIdsRaw] = useState(searchParams?.get('ids') || '');
   const [riskFilter, setRiskFilter] = useState<string>(searchParams?.get('risk') || 'all');
   const [sortField, setSortField] = useState<SortField>(parseSortField(searchParams?.get('sort') || null));
   const [sortDirection, setSortDirection] = useState<SortDirection>(parseSortDirection(searchParams?.get('dir') || null));
@@ -86,6 +100,7 @@ export default function ItemsPage() {
   const itemMetricsState = useItemMetrics();
   const itemMetrics = useMemo(() => itemMetricsState.data ?? [], [itemMetricsState.data]);
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
+  const debouncedInternalIdsRaw = useDebouncedValue(internalIdsRaw, 300);
   const cart = useCart();
   const lastSentState = usePoLastSentByItem();
   const lastSentItems = useMemo(() => lastSentState.data ?? [], [lastSentState.data]);
@@ -107,7 +122,9 @@ export default function ItemsPage() {
   useEffect(() => {
     const params = new URLSearchParams();
     const q = debouncedQuery.trim();
+    const ids = debouncedInternalIdsRaw.trim();
     if (q) params.set('query', q);
+    if (ids) params.set('ids', ids);
     if (riskFilter && riskFilter !== 'all') params.set('risk', riskFilter);
     if (sortField !== 'days_of_cover') params.set('sort', sortField);
     if (sortDirection !== 'asc') params.set('dir', sortDirection);
@@ -115,15 +132,17 @@ export default function ItemsPage() {
     const qs = params.toString();
     const url = qs ? `/items?${qs}` : '/items';
     router.replace(url, { scroll: false });
-  }, [debouncedQuery, riskFilter, sortField, sortDirection, router]);
+  }, [debouncedQuery, debouncedInternalIdsRaw, riskFilter, sortField, sortDirection, router]);
 
   // 戻る/進む等でURLが変わったとき、入力状態に追従
   useEffect(() => {
     const q = searchParams?.get('query') || '';
+    const ids = searchParams?.get('ids') || '';
     const r = searchParams?.get('risk') || 'all';
     const sf = parseSortField(searchParams?.get('sort') || null);
     const sd = parseSortDirection(searchParams?.get('dir') || null);
     if (q !== searchQuery) setSearchQuery(q);
+    if (ids !== internalIdsRaw) setInternalIdsRaw(ids);
     if (r !== riskFilter) setRiskFilter(r);
     if (sf !== sortField) setSortField(sf);
     if (sd !== sortDirection) setSortDirection(sd);
@@ -132,6 +151,15 @@ export default function ItemsPage() {
 
   const filteredAndSortedItems = useMemo(() => {
     let items = itemMetrics;
+
+    // 社内IDリスト（完全一致）フィルタ
+    if (internalIdsRaw.trim()) {
+      const ids = parseInternalIds(internalIdsRaw);
+      if (ids.length > 0) {
+        const set = new Set(ids);
+        items = items.filter((item) => set.has(item.internal_id.toLowerCase()));
+      }
+    }
 
     // 検索フィルタ
     if (searchQuery) {
@@ -194,7 +222,7 @@ export default function ItemsPage() {
     });
 
     return items;
-  }, [itemMetrics, searchQuery, riskFilter, sortField, sortDirection]);
+  }, [itemMetrics, internalIdsRaw, searchQuery, riskFilter, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -399,7 +427,7 @@ export default function ItemsPage() {
                 <div>
                   <CardTitle>検索・フィルタ</CardTitle>
                   <CardDescription className="mt-1">
-                    社内IDや商品名で検索、リスクレベルでフィルタリング
+                    社内IDリスト（複数貼り付け）や商品名で検索、リスクレベルでフィルタリング
                   </CardDescription>
                 </div>
                 <Button
@@ -449,6 +477,33 @@ export default function ItemsPage() {
                     <SelectItem value="dormant">休眠（灰）</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-foreground">社内IDリスト（完全一致）</div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-transparent"
+                    onClick={() => setInternalIdsRaw('')}
+                    disabled={!internalIdsRaw.trim()}
+                    title="社内IDリストをクリア"
+                  >
+                    クリア
+                  </Button>
+                </div>
+                <Textarea
+                  placeholder="例: A-001, A-002（タブ/スペース/カンマ/改行区切りで複数入力OK）"
+                  value={internalIdsRaw}
+                  onChange={(e) => setInternalIdsRaw(e.target.value)}
+                  className="min-h-20 font-mono text-sm"
+                  disabled={itemMetrics.length === 0 && itemMetricsState.status === 'loading'}
+                />
+                {internalIdsRaw.trim() && (
+                  <div className="text-xs text-muted-foreground">
+                    入力ID数: {parseInternalIds(internalIdsRaw).length}（一致した社内IDのみ表示）
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline" className="text-xs">
