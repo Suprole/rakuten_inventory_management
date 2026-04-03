@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigation } from '@/components/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,6 +55,8 @@ export default function POCartPage() {
   }, [itemMetrics]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const unresolved = useMemo(() => {
     // item_metrics 側に存在しないIDを検知（ETL更新やマスタ変更の可能性）
@@ -66,13 +68,23 @@ export default function POCartPage() {
   }, [cart.lines, itemById]);
 
   const canSubmit = cart.lineCount > 0 && !isSubmitting;
+  const totalPages = Math.max(1, Math.ceil(cart.lineCount / pageSize));
+  const paginatedLines = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return cart.lines.slice(start, start + pageSize);
+  }, [cart.lines, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleConfirm = async () => {
     if (!canSubmit) return;
     setIsSubmitting(true);
     try {
       const payload = {
-        supplier: cart.cart.supplier,
         note: cart.cart.note,
         lines: cart.lines.map((l) => ({
           internal_id: l.internal_id,
@@ -146,247 +158,277 @@ export default function POCartPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            {unresolved.length > 0 && (
-              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-                item_metrics に存在しない商品があります（ETL更新/マスタ変更の可能性）: {unresolved.join(', ')}
-              </div>
-            )}
+        <div className="space-y-6">
+          {unresolved.length > 0 && (
+            <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+              item_metrics に存在しない商品があります（ETL更新/マスタ変更の可能性）: {unresolved.join(', ')}
+            </div>
+          )}
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between gap-3">
-                  <span>カート内容</span>
-                  {cart.lineCount > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between gap-3">
+                <span>カート内容</span>
+                {cart.lineCount > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-transparent text-destructive hover:text-destructive"
+                    onClick={() => {
+                      if (confirm('カートを空にしますか？')) cart.actions.clearCart();
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    クリア
+                  </Button>
+                )}
+              </CardTitle>
+              <CardDescription>
+                ケース入り数を確認しながら、発注数量を手動で入力できます
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="font-semibold">社内ID</TableHead>
+                      <TableHead className="font-semibold">商品名</TableHead>
+                      <TableHead className="font-semibold">ケース入り数</TableHead>
+                      <TableHead className="text-right font-semibold">推奨数量</TableHead>
+                      <TableHead className="text-right font-semibold">発注数量</TableHead>
+                      <TableHead className="text-right font-semibold">単価</TableHead>
+                      <TableHead className="text-right font-semibold">金額</TableHead>
+                      <TableHead className="w-24"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cart.lineCount === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="h-24 text-center">
+                          <p className="text-muted-foreground">カートが空です</p>
+                          <Link href="/items" className="mt-2 inline-block">
+                            <Button variant="outline" className="bg-transparent">
+                              在庫一覧へ
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paginatedLines.map((line) => {
+                        const latest = itemById.get(line.internal_id);
+                        const name = latest?.name || line.name || line.internal_id;
+                        const orderPack = (latest?.order_pack ?? line.order_pack ?? '').trim();
+                        const recommendedQty = latest?.reorder_qty_suggested ?? line.recommended_qty ?? 0;
+                        const orderUnit = (latest?.order_unit ?? line.order_unit ?? '').trim();
+                        const orderAmount = (latest?.order_amount ?? line.order_amount ?? '').trim();
+                        const orderParts: string[] = [];
+                        if (orderUnit) orderParts.push(`発注単位: ${orderUnit}`);
+                        if (orderAmount) orderParts.push(`発注金額: ${orderAmount}`);
+                        const orderInfo = orderParts.join(' / ');
+                        return (
+                          <TableRow key={line.internal_id}>
+                            <TableCell className="font-mono text-sm">
+                              <Link href={`/items/${encodeURIComponent(line.internal_id)}`} className="text-primary hover:underline">
+                                {line.internal_id}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="max-w-[260px]">
+                              <div className="truncate font-medium" title={name}>
+                                {name}
+                              </div>
+                              {orderInfo && (
+                                <div className="mt-1 whitespace-normal break-words text-xs text-muted-foreground" title={orderInfo}>
+                                  {orderInfo}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="text"
+                                className="w-28"
+                                value={orderPack}
+                                onChange={(e) => {
+                                  cart.actions.updateLine(line.internal_id, {
+                                    order_pack: e.target.value,
+                                  });
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {recommendedQty > 0 ? recommendedQty.toLocaleString() : '-'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                type="number"
+                                className="w-24 text-right"
+                                min={0}
+                                step={1}
+                                value={line.qty}
+                                onChange={(e) => {
+                                  cart.actions.updateLine(line.internal_id, {
+                                    qty: parseInt(e.target.value) || 0,
+                                  });
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                type="number"
+                                className="w-24 text-right"
+                                min={0}
+                                step={1}
+                                value={line.unit_cost}
+                                onChange={(e) => {
+                                  cart.actions.updateLine(line.internal_id, {
+                                    unit_cost: parseFloat(e.target.value) || 0,
+                                  });
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-semibold">
+                              {formatYen(line.qty * line.unit_cost)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-transparent text-destructive hover:text-destructive"
+                                onClick={() => cart.actions.removeLine(line.internal_id)}
+                              >
+                                削除
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {cart.lineCount > 0 && totalPages > 1 && (
+                <div className="flex flex-col items-center justify-between gap-3 border-t border-border px-4 py-4 sm:flex-row">
+                  <div className="text-sm text-muted-foreground">
+                    {`${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, cart.lineCount)} / ${cart.lineCount} 件`}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="bg-transparent text-destructive hover:text-destructive"
-                      onClick={() => {
-                        if (confirm('カートを空にしますか？')) cart.actions.clearCart();
-                      }}
+                      className="bg-transparent"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      クリア
+                      前へ
                     </Button>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  ケース入り数を確認しながら、発注数量を手動で入力できます
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="font-semibold">社内ID</TableHead>
-                        <TableHead className="font-semibold">商品名</TableHead>
-                        <TableHead className="font-semibold">ケース入り数</TableHead>
-                        <TableHead className="text-right font-semibold">推奨数量</TableHead>
-                        <TableHead className="text-right font-semibold">発注数量</TableHead>
-                        <TableHead className="text-right font-semibold">単価</TableHead>
-                        <TableHead className="text-right font-semibold">金額</TableHead>
-                        <TableHead className="w-24"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {cart.lineCount === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="h-24 text-center">
-                            <p className="text-muted-foreground">カートが空です</p>
-                            <Link href="/items" className="inline-block mt-2">
-                              <Button variant="outline" className="bg-transparent">
-                                在庫一覧へ
-                              </Button>
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        cart.lines.map((line) => {
-                          const latest = itemById.get(line.internal_id);
-                          const name = latest?.name || line.name || line.internal_id;
-                          const orderPack = (latest?.order_pack ?? line.order_pack ?? '').trim();
-                          const recommendedQty = latest?.reorder_qty_suggested ?? line.recommended_qty ?? 0;
-                          const orderUnit = (latest?.order_unit ?? line.order_unit ?? '').trim();
-                          const orderAmount = (latest?.order_amount ?? line.order_amount ?? '').trim();
-                          const orderParts: string[] = [];
-                          if (orderUnit) orderParts.push(`発注単位: ${orderUnit}`);
-                          if (orderAmount) orderParts.push(`発注金額: ${orderAmount}`);
-                          const orderInfo = orderParts.join(' / ');
-                          return (
-                            <TableRow key={line.internal_id}>
-                              <TableCell className="font-mono text-sm">
-                                <Link href={`/items/${encodeURIComponent(line.internal_id)}`} className="text-primary hover:underline">
-                                  {line.internal_id}
-                                </Link>
-                              </TableCell>
-                              <TableCell className="max-w-[260px]">
-                                <div className="font-medium truncate" title={name}>
-                                  {name}
-                                </div>
-                                {orderInfo && (
-                                  <div className="mt-1 text-xs text-muted-foreground whitespace-normal break-words" title={orderInfo}>
-                                    {orderInfo}
-                                  </div>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  type="text"
-                                  className="w-28"
-                                  value={orderPack}
-                                  onChange={(e) => {
-                                    cart.actions.updateLine(line.internal_id, {
-                                      order_pack: e.target.value,
-                                    });
-                                  }}
-                                />
-                              </TableCell>
-                              <TableCell className="text-right font-mono">
-                                {recommendedQty > 0 ? recommendedQty.toLocaleString() : '-'}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Input
-                                  type="number"
-                                  className="w-24 text-right"
-                                  min={0}
-                                  step={1}
-                                  value={line.qty}
-                                  onChange={(e) => {
-                                    cart.actions.updateLine(line.internal_id, {
-                                      qty: parseInt(e.target.value) || 0,
-                                    });
-                                  }}
-                                />
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Input
-                                  type="number"
-                                  className="w-24 text-right"
-                                  min={0}
-                                  step={1}
-                                  value={line.unit_cost}
-                                  onChange={(e) => {
-                                    cart.actions.updateLine(line.internal_id, {
-                                      unit_cost: parseFloat(e.target.value) || 0,
-                                    });
-                                  }}
-                                />
-                              </TableCell>
-                              <TableCell className="text-right font-mono font-semibold">
-                                {formatYen(line.qty * line.unit_cost)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="bg-transparent text-destructive hover:text-destructive"
-                                  onClick={() => cart.actions.removeLine(line.internal_id)}
-                                >
-                                  削除
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="lg:col-span-1 space-y-6">
-            <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle>発注情報</CardTitle>
-                <CardDescription>サプライヤーと備考を入力</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="supplier">サプライヤー</Label>
-                  <Input
-                    id="supplier"
-                    value={cart.cart.supplier}
-                    placeholder="例: サプライヤーA"
-                    onChange={(e) => cart.actions.setCartMeta({ supplier: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="note">備考</Label>
-                  <Textarea
-                    id="note"
-                    value={cart.cart.note}
-                    placeholder="発注に関するメモを入力..."
-                    rows={4}
-                    onChange={(e) => cart.actions.setCartMeta({ note: e.target.value })}
-                  />
-                </div>
-
-                <div className="space-y-3 border-t border-border pt-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">選択品目数</span>
-                    <span className="font-semibold text-foreground">{cart.lineCount} 件</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">合計数量</span>
-                    <span className="font-mono font-semibold text-foreground">
-                      {cart.totalQty.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-border pt-3">
-                    <span className="font-medium text-muted-foreground">合計金額</span>
-                    <span className="text-xl font-bold text-primary">
-                      {formatYen(cart.totalAmount)}
-                    </span>
-                  </div>
-                </div>
-
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button className="w-full" size="lg" disabled={!canSubmit}>
-                      {isSubmitting ? '確定中...' : '発注を確定'}
+                    {Array.from({ length: totalPages }, (_, index) => {
+                      const page = index + 1;
+                      const isActive = page === currentPage;
+                      return (
+                        <Button
+                          key={page}
+                          variant={isActive ? 'default' : 'outline'}
+                          size="sm"
+                          className={isActive ? '' : 'bg-transparent'}
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
+                        </Button>
+                      );
+                    })}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-transparent"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    >
+                      次へ
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>発注を確定しますか？</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        この操作で発注を作成し、メール送信を行います。メール送信に失敗した場合はドラフトのまま保存されます。
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="space-y-2 py-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">品目数</span>
-                        <span className="font-semibold">{cart.lineCount} 件</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">合計数量</span>
-                        <span className="font-mono font-semibold">{cart.totalQty.toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-border pt-2">
-                        <span className="text-muted-foreground">合計金額</span>
-                        <span className="font-semibold">{formatYen(cart.totalAmount)}</span>
-                      </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>発注情報</CardTitle>
+              <CardDescription>備考を入力して発注内容を確認します</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="note">備考</Label>
+                <Textarea
+                  id="note"
+                  value={cart.cart.note}
+                  placeholder="発注に関するメモを入力..."
+                  rows={4}
+                  onChange={(e) => cart.actions.setCartMeta({ note: e.target.value })}
+                />
+              </div>
+
+              <div className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
+                <div className="rounded-md border border-border bg-muted/30 p-4">
+                  <div className="text-sm text-muted-foreground">選択品目数</div>
+                  <div className="mt-1 text-2xl font-semibold text-foreground">{cart.lineCount} 件</div>
+                </div>
+                <div className="rounded-md border border-border bg-muted/30 p-4">
+                  <div className="text-sm text-muted-foreground">合計数量</div>
+                  <div className="mt-1 font-mono text-2xl font-semibold text-foreground">
+                    {cart.totalQty.toLocaleString()}
+                  </div>
+                </div>
+                <div className="rounded-md border border-border bg-muted/30 p-4">
+                  <div className="text-sm text-muted-foreground">合計金額</div>
+                  <div className="mt-1 text-2xl font-bold text-primary">
+                    {formatYen(cart.totalAmount)}
+                  </div>
+                </div>
+              </div>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button className="w-full sm:w-auto" size="lg" disabled={!canSubmit}>
+                    {isSubmitting ? '確定中...' : '発注を確定'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>発注を確定しますか？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      この操作で発注を作成し、メール送信を行います。メール送信に失敗した場合はドラフトのまま保存されます。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="space-y-2 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">品目数</span>
+                      <span className="font-semibold">{cart.lineCount} 件</span>
                     </div>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel disabled={isSubmitting}>戻る</AlertDialogCancel>
-                      <AlertDialogAction disabled={isSubmitting} onClick={handleConfirm}>
-                        確定する
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">合計数量</span>
+                      <span className="font-mono font-semibold">{cart.totalQty.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-border pt-2">
+                      <span className="text-muted-foreground">合計金額</span>
+                      <span className="font-semibold">{formatYen(cart.totalAmount)}</span>
+                    </div>
+                  </div>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isSubmitting}>戻る</AlertDialogCancel>
+                    <AlertDialogAction disabled={isSubmitting} onClick={handleConfirm}>
+                      確定する
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
 
-                <p className="text-xs text-center text-muted-foreground">
-                  確定後は発注詳細から内容を確認できます
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+              <p className="text-xs text-muted-foreground">
+                確定後は発注詳細から内容を確認できます
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>
