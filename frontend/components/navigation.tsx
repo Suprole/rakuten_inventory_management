@@ -28,16 +28,19 @@ const navItems = [
     title: 'ミラーずれ監視',
     href: '/monitor/mirror',
     icon: AlertTriangle,
+    requiresPrivilegedEmail: true,
   },
   {
     title: 'BOM未紐付け監視',
     href: '/monitor/bom-unmapped',
     icon: AlertCircle,
+    requiresPrivilegedEmail: true,
   },
   {
     title: 'Yahoo未紐付け監視',
     href: '/monitor/yahoo-bom-unmapped',
     icon: AlertCircle,
+    requiresPrivilegedEmail: true,
   },
 ];
 
@@ -45,6 +48,8 @@ export function Navigation() {
   const pathname = usePathname();
   const session = useSession();
   const email = session.data?.user?.email || '';
+  const normalizedEmail = email.trim().toLowerCase();
+  const canViewMonitorNav = normalizedEmail === 'info@suprole.com';
   const cart = useCart();
 
   return (
@@ -62,6 +67,7 @@ export function Navigation() {
             </Link>
             <div className="hidden md:flex md:gap-1">
               {navItems.map((item) => {
+                if (item.requiresPrivilegedEmail && !canViewMonitorNav) return null;
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                 const Icon = item.icon;
                 return (
