@@ -88,6 +88,10 @@ function parseInternalIds(raw: string): string[] {
   return Array.from(new Set(parts));
 }
 
+function formatYen(value: number): string {
+  return `¥${Math.round(value || 0).toLocaleString()}`;
+}
+
 export default function ItemsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -224,6 +228,35 @@ export default function ItemsPage() {
     return items;
   }, [itemMetrics, internalIdsRaw, searchQuery, riskFilter, sortField, sortDirection]);
 
+  const totals = useMemo(() => {
+    return filteredAndSortedItems.reduce(
+      (acc, item) => {
+        const inventoryAmount = item.derived_stock * (item.default_unit_cost ?? 0);
+        acc.derivedStock += item.derived_stock ?? 0;
+        acc.metroLastMonth += item.metro_last_month_sales ?? 0;
+        acc.windyLastMonth += item.windy_last_month_sales ?? 0;
+        acc.yahooLastMonth += item.yahoo_last_month_sales ?? 0;
+        acc.metroThisMonth += item.metro_this_month_sales ?? 0;
+        acc.windyThisMonth += item.windy_this_month_sales ?? 0;
+        acc.yahooThisMonth += item.yahoo_this_month_sales ?? 0;
+        acc.inventoryAmount += inventoryAmount;
+        acc.reorderSuggested += item.reorder_qty_suggested ?? 0;
+        return acc;
+      },
+      {
+        derivedStock: 0,
+        metroLastMonth: 0,
+        windyLastMonth: 0,
+        yahooLastMonth: 0,
+        metroThisMonth: 0,
+        windyThisMonth: 0,
+        yahooThisMonth: 0,
+        inventoryAmount: 0,
+        reorderSuggested: 0,
+      }
+    );
+  }, [filteredAndSortedItems]);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -330,6 +363,131 @@ export default function ItemsPage() {
     );
   };
 
+  const renderItemRow = (item: ItemMetric) => {
+    const inventoryAmount = item.derived_stock * (item.default_unit_cost ?? 0);
+
+    return (
+      <TableRow
+        key={item.internal_id}
+        className="cursor-pointer hover:bg-accent/50"
+        role="link"
+        tabIndex={0}
+        onClick={() => router.push(`/items/${item.internal_id}`)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            router.push(`/items/${item.internal_id}`);
+          }
+        }}
+      >
+        <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
+        <TableCell className="font-mono text-sm">
+          {item.internal_id}
+        </TableCell>
+        <TableCell className="whitespace-nowrap text-xs">
+          {(() => {
+            const x = lastSentByInternalId.get(item.internal_id);
+            if (!x || !x.last_sent_at) return <span className="text-muted-foreground">-</span>;
+            return (
+              <span title={`PO: ${x.last_po_id}`}>
+                {formatDateOnly(x.last_sent_at)}
+              </span>
+            );
+          })()}
+        </TableCell>
+        <TableCell className="font-medium">
+          <span title={item.name} className="block max-w-[220px] truncate">
+            {item.name}
+          </span>
+        </TableCell>
+        <TableCell className="text-right font-mono pr-2">
+          {item.derived_stock.toLocaleString()}
+        </TableCell>
+        <TableCell className="text-right font-mono pr-2">
+          {formatYen(inventoryAmount)}
+        </TableCell>
+        <TableCell className="text-right pl-2 pr-2">
+          <SalesInline
+            metro={item.metro_last_month_sales}
+            windy={item.windy_last_month_sales}
+            yahoo={item.yahoo_last_month_sales}
+          />
+        </TableCell>
+        <TableCell className="text-right pl-2">
+          <SalesInline
+            metro={item.metro_this_month_sales}
+            windy={item.windy_this_month_sales}
+            yahoo={item.yahoo_this_month_sales}
+          />
+        </TableCell>
+        <TableCell className="text-right font-mono">
+          <span
+            className={cn(
+              item.risk_level === 'red' && 'text-destructive',
+              item.risk_level === 'yellow' && 'text-warning',
+              item.risk_level === 'green' && 'text-success',
+              item.risk_level === 'surplus' && 'text-surplus',
+              item.risk_level === 'dormant' && 'text-dormant'
+            )}
+          >
+            {formatDaysOfCover(item)}日
+          </span>
+        </TableCell>
+        <TableCell className="text-right font-mono">
+          {item.reorder_qty_suggested > 0 ? (
+            <span className="font-semibold text-primary">
+              {item.reorder_qty_suggested.toLocaleString()}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </TableCell>
+        <TableCell>
+          {isInCart(item.internal_id) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-transparent"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push('/po/cart');
+              }}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              カートへ
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-transparent"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cart.actions.addToCart({
+                  internal_id: item.internal_id,
+                  name: item.name,
+                  qty: 0,
+                  unit_cost: item.default_unit_cost ?? 0,
+                  recommended_qty: item.reorder_qty_suggested,
+                  order_pack: item.order_pack,
+                  order_unit: item.order_unit,
+                  order_amount: item.order_amount,
+                  basis_need_qty: item.need_qty,
+                  basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
+                });
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              追加
+            </Button>
+          )}
+        </TableCell>
+      </TableRow>
+    );
+  };
+
   const downloadCsv = () => {
     const rows: string[][] = [];
     rows.push([
@@ -427,7 +585,7 @@ export default function ItemsPage() {
                 <div>
                   <CardTitle>検索・フィルタ</CardTitle>
                   <CardDescription className="mt-1">
-                    社内IDリスト（複数貼り付け）や商品名で検索、リスクレベルでフィルタリング
+                    ID複数検索や商品名で検索、リスクレベルでフィルタリング
                   </CardDescription>
                 </div>
                 <Button
@@ -480,14 +638,14 @@ export default function ItemsPage() {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-foreground">社内IDリスト（完全一致）</div>
+                  <div className="text-sm font-medium text-foreground">社内ID複数検索</div>
                   <Button
                     variant="outline"
                     size="sm"
                     className="bg-transparent"
                     onClick={() => setInternalIdsRaw('')}
                     disabled={!internalIdsRaw.trim()}
-                    title="社内IDリストをクリア"
+                    title="ID複数検索をクリア"
                   >
                     クリア
                   </Button>
@@ -522,9 +680,9 @@ export default function ItemsPage() {
                 <Table className="table-fixed">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[76px] font-semibold">リスク</TableHead>
+                      <TableHead className="sticky top-0 z-20 w-[76px] bg-card font-semibold">リスク</TableHead>
                       <TableHead
-                        className="w-[132px] cursor-pointer font-semibold hover:text-foreground"
+                        className="sticky top-0 z-20 w-[132px] cursor-pointer bg-card font-semibold hover:text-foreground"
                         onClick={() => handleSort('internal_id')}
                       >
                         <div className="flex items-center gap-1">
@@ -532,11 +690,11 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="w-[110px] font-semibold" title="最終発注（送信）日">
+                      <TableHead className="sticky top-0 z-20 w-[110px] bg-card font-semibold" title="最終発注（送信）日">
                         最終発注
                       </TableHead>
                       <TableHead
-                        className="w-[220px] cursor-pointer font-semibold hover:text-foreground"
+                        className="sticky top-0 z-20 w-[220px] cursor-pointer bg-card font-semibold hover:text-foreground"
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
@@ -545,7 +703,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[88px] cursor-pointer text-right font-semibold hover:text-foreground pr-2"
+                        className="sticky top-0 z-20 w-[88px] cursor-pointer bg-card pr-2 text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('derived_stock')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -553,8 +711,11 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
+                      <TableHead className="sticky top-0 z-20 w-[120px] bg-card text-right font-semibold">
+                        在庫金額
+                      </TableHead>
                       <TableHead
-                        className="w-[140px] cursor-pointer text-right font-semibold hover:text-foreground pl-2 pr-2"
+                        className="sticky top-0 z-20 w-[140px] cursor-pointer bg-card pl-2 pr-2 text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('sales_last_month')}
                         title="（metro+windy+yahoo）合計でソート"
                       >
@@ -564,7 +725,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[140px] cursor-pointer text-right font-semibold hover:text-foreground pl-2"
+                        className="sticky top-0 z-20 w-[140px] cursor-pointer bg-card pl-2 text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('sales_this_month')}
                         title="（metro+windy+yahoo）合計でソート"
                       >
@@ -574,7 +735,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[80px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="sticky top-0 z-20 w-[80px] cursor-pointer bg-card text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('days_of_cover')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -583,7 +744,7 @@ export default function ItemsPage() {
                         </div>
                       </TableHead>
                       <TableHead
-                        className="w-[80px] cursor-pointer text-right font-semibold hover:text-foreground"
+                        className="sticky top-0 z-20 w-[80px] cursor-pointer bg-card text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('reorder_qty_suggested')}
                       >
                         <div className="flex items-center justify-end gap-1">
@@ -591,260 +752,102 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="w-[104px] font-semibold">カート</TableHead>
+                      <TableHead className="sticky top-0 z-20 w-[104px] bg-card font-semibold">カート</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {itemMetricsState.status === 'loading' ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-24 text-center">
+                        <TableCell colSpan={11} className="h-24 text-center">
                           <p className="text-muted-foreground">読み込み中...</p>
                         </TableCell>
                       </TableRow>
                     ) : itemMetricsState.status === 'error' && filteredAndSortedItems.length > 0 ? (
-                      filteredAndSortedItems.map((item) => (
-                        <TableRow
-                          key={item.internal_id}
-                          className="cursor-pointer hover:bg-accent/50"
-                          role="link"
-                          tabIndex={0}
-                          onClick={() => router.push(`/items/${item.internal_id}`)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              router.push(`/items/${item.internal_id}`);
-                            }
-                          }}
-                        >
-                          <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {item.internal_id}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs">
-                            {(() => {
-                              const x = lastSentByInternalId.get(item.internal_id);
-                              if (!x || !x.last_sent_at) return <span className="text-muted-foreground">-</span>;
-                              return (
-                                <span title={`PO: ${x.last_po_id}`}>
-                                  {formatDateOnly(x.last_sent_at)}
-                                </span>
-                              );
-                            })()}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <span title={item.name} className="block max-w-[220px] truncate">
-                              {item.name}
+                      <>
+                        <TableRow className="border-b-2 bg-muted/70 hover:bg-muted/70">
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 font-semibold">合計</TableCell>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70" colSpan={3}>
+                            <span className="text-sm text-muted-foreground">
+                              表示中 {filteredAndSortedItems.length} 件
                             </span>
                           </TableCell>
-                          <TableCell className="text-right font-mono pr-2">
-                            {item.derived_stock.toLocaleString()}
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right font-mono font-semibold pr-2">
+                            {totals.derivedStock.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right pl-2 pr-2">
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right font-mono font-semibold">
+                            {formatYen(totals.inventoryAmount)}
+                          </TableCell>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right pl-2 pr-2">
                             <SalesInline
-                              metro={item.metro_last_month_sales}
-                              windy={item.windy_last_month_sales}
-                              yahoo={item.yahoo_last_month_sales}
+                              metro={totals.metroLastMonth}
+                              windy={totals.windyLastMonth}
+                              yahoo={totals.yahooLastMonth}
                             />
                           </TableCell>
-                          <TableCell className="text-right pl-2">
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right pl-2">
                             <SalesInline
-                              metro={item.metro_this_month_sales}
-                              windy={item.windy_this_month_sales}
-                              yahoo={item.yahoo_this_month_sales}
+                              metro={totals.metroThisMonth}
+                              windy={totals.windyThisMonth}
+                              yahoo={totals.yahooThisMonth}
                             />
                           </TableCell>
-                          <TableCell className="text-right font-mono">
-                            <span
-                              className={cn(
-                                item.risk_level === 'red' && 'text-destructive',
-                                item.risk_level === 'yellow' && 'text-warning',
-                                item.risk_level === 'green' && 'text-success',
-                                item.risk_level === 'surplus' && 'text-surplus',
-                                item.risk_level === 'dormant' && 'text-dormant'
-                              )}
-                            >
-                              {formatDaysOfCover(item)}日
-                            </span>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right font-mono text-muted-foreground">
+                            -
                           </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {item.reorder_qty_suggested > 0 ? (
-                              <span className="font-semibold text-primary">
-                                {item.reorder_qty_suggested.toLocaleString()}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right font-mono font-semibold">
+                            {totals.reorderSuggested > 0 ? totals.reorderSuggested.toLocaleString() : '-'}
                           </TableCell>
-                          <TableCell>
-                            {isInCart(item.internal_id) ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="bg-transparent"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  router.push('/po/cart');
-                                }}
-                              >
-                                <ShoppingCart className="mr-2 h-4 w-4" />
-                                カートへ
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="bg-transparent"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  cart.actions.addToCart({
-                                    internal_id: item.internal_id,
-                                    name: item.name,
-                                    qty: 0,
-                                    unit_cost: item.default_unit_cost ?? 0,
-                                    recommended_qty: item.reorder_qty_suggested,
-                                    order_pack: item.order_pack,
-                                    order_unit: item.order_unit,
-                                    order_amount: item.order_amount,
-                                    basis_need_qty: item.need_qty,
-                                    basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
-                                  });
-                                }}
-                              >
-                                <Plus className="mr-2 h-4 w-4" />
-                                追加
-                              </Button>
-                            )}
-                          </TableCell>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70" />
                         </TableRow>
-                      ))
+                        {filteredAndSortedItems.map(renderItemRow)}
+                      </>
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-24 text-center">
+                        <TableCell colSpan={11} className="h-24 text-center">
                           <p className="text-muted-foreground">
                             該当する商品が見つかりませんでした
                           </p>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredAndSortedItems.map((item) => (
-                        <TableRow
-                          key={item.internal_id}
-                          className="cursor-pointer hover:bg-accent/50"
-                          role="link"
-                          tabIndex={0}
-                          onClick={() => router.push(`/items/${item.internal_id}`)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              router.push(`/items/${item.internal_id}`);
-                            }
-                          }}
-                        >
-                          <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {item.internal_id}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs">
-                            {(() => {
-                              const x = lastSentByInternalId.get(item.internal_id);
-                              if (!x || !x.last_sent_at) return <span className="text-muted-foreground">-</span>;
-                              return (
-                                <span title={`PO: ${x.last_po_id}`}>
-                                  {formatDateOnly(x.last_sent_at)}
-                                </span>
-                              );
-                            })()}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <span title={item.name} className="block max-w-[220px] truncate">
-                              {item.name}
+                      <>
+                        <TableRow className="border-b-2 bg-muted/70 hover:bg-muted/70">
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 font-semibold">合計</TableCell>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70" colSpan={3}>
+                            <span className="text-sm text-muted-foreground">
+                              表示中 {filteredAndSortedItems.length} 件
                             </span>
                           </TableCell>
-                          <TableCell className="text-right font-mono pr-2">
-                            {item.derived_stock.toLocaleString()}
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right font-mono font-semibold pr-2">
+                            {totals.derivedStock.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right pl-2 pr-2">
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right font-mono font-semibold">
+                            {formatYen(totals.inventoryAmount)}
+                          </TableCell>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right pl-2 pr-2">
                             <SalesInline
-                              metro={item.metro_last_month_sales}
-                              windy={item.windy_last_month_sales}
-                              yahoo={item.yahoo_last_month_sales}
+                              metro={totals.metroLastMonth}
+                              windy={totals.windyLastMonth}
+                              yahoo={totals.yahooLastMonth}
                             />
                           </TableCell>
-                          <TableCell className="text-right pl-2">
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right pl-2">
                             <SalesInline
-                              metro={item.metro_this_month_sales}
-                              windy={item.windy_this_month_sales}
-                              yahoo={item.yahoo_this_month_sales}
+                              metro={totals.metroThisMonth}
+                              windy={totals.windyThisMonth}
+                              yahoo={totals.yahooThisMonth}
                             />
                           </TableCell>
-                          <TableCell className="text-right font-mono">
-                            <span
-                              className={cn(
-                                item.risk_level === 'red' && 'text-destructive',
-                                item.risk_level === 'yellow' && 'text-warning',
-                                item.risk_level === 'green' && 'text-success',
-                                item.risk_level === 'surplus' && 'text-surplus',
-                                item.risk_level === 'dormant' && 'text-dormant'
-                              )}
-                            >
-                              {formatDaysOfCover(item)}日
-                            </span>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right font-mono text-muted-foreground">
+                            -
                           </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {item.reorder_qty_suggested > 0 ? (
-                              <span className="font-semibold text-primary">
-                                {item.reorder_qty_suggested.toLocaleString()}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
+                          <TableCell className="sticky top-10 z-10 bg-muted/70 text-right font-mono font-semibold">
+                            {totals.reorderSuggested > 0 ? totals.reorderSuggested.toLocaleString() : '-'}
                           </TableCell>
-                          <TableCell>
-                            {isInCart(item.internal_id) ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="bg-transparent"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  router.push('/po/cart');
-                                }}
-                              >
-                                <ShoppingCart className="mr-2 h-4 w-4" />
-                                カートへ
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="bg-transparent"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  cart.actions.addToCart({
-                                    internal_id: item.internal_id,
-                                    name: item.name,
-                                    qty: 0,
-                                    unit_cost: item.default_unit_cost ?? 0,
-                                    recommended_qty: item.reorder_qty_suggested,
-                                    order_pack: item.order_pack,
-                                    order_unit: item.order_unit,
-                                    order_amount: item.order_amount,
-                                    basis_need_qty: item.need_qty,
-                                    basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
-                                  });
-                                }}
-                              >
-                                <Plus className="mr-2 h-4 w-4" />
-                                追加
-                              </Button>
-                            )}
-                          </TableCell>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70" />
                         </TableRow>
-                      ))
+                        {filteredAndSortedItems.map(renderItemRow)}
+                      </>
                     )}
                   </TableBody>
                 </Table>
