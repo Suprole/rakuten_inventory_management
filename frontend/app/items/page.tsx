@@ -701,8 +701,9 @@ export default function ItemsPage() {
                                   cart.actions.addToCart({
                                     internal_id: item.internal_id,
                                     name: item.name,
-                                    qty: item.reorder_qty_suggested > 0 ? item.reorder_qty_suggested : 0,
+                                    qty: 0,
                                     unit_cost: item.default_unit_cost ?? 0,
+                                    recommended_qty: item.reorder_qty_suggested,
                                     order_pack: item.order_pack,
                                     order_unit: item.order_unit,
                                     order_amount: item.order_amount,
@@ -826,8 +827,9 @@ export default function ItemsPage() {
                                   cart.actions.addToCart({
                                     internal_id: item.internal_id,
                                     name: item.name,
-                                    qty: item.reorder_qty_suggested > 0 ? item.reorder_qty_suggested : 0,
+                                    qty: 0,
                                     unit_cost: item.default_unit_cost ?? 0,
+                                    recommended_qty: item.reorder_qty_suggested,
                                     order_pack: item.order_pack,
                                     order_unit: item.order_unit,
                                     order_amount: item.order_amount,

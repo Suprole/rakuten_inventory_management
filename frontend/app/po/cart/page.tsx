@@ -184,6 +184,7 @@ export default function POCartPage() {
                         <TableHead className="font-semibold">社内ID</TableHead>
                         <TableHead className="font-semibold">商品名</TableHead>
                         <TableHead className="font-semibold">ケース入り数</TableHead>
+                        <TableHead className="text-right font-semibold">推奨数量</TableHead>
                         <TableHead className="text-right font-semibold">発注数量</TableHead>
                         <TableHead className="text-right font-semibold">単価</TableHead>
                         <TableHead className="text-right font-semibold">金額</TableHead>
@@ -193,7 +194,7 @@ export default function POCartPage() {
                     <TableBody>
                       {cart.lineCount === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="h-24 text-center">
+                          <TableCell colSpan={8} className="h-24 text-center">
                             <p className="text-muted-foreground">カートが空です</p>
                             <Link href="/items" className="inline-block mt-2">
                               <Button variant="outline" className="bg-transparent">
@@ -207,6 +208,7 @@ export default function POCartPage() {
                           const latest = itemById.get(line.internal_id);
                           const name = latest?.name || line.name || line.internal_id;
                           const orderPack = (latest?.order_pack ?? line.order_pack ?? '').trim();
+                          const recommendedQty = latest?.reorder_qty_suggested ?? line.recommended_qty ?? 0;
                           const orderUnit = (latest?.order_unit ?? line.order_unit ?? '').trim();
                           const orderAmount = (latest?.order_amount ?? line.order_amount ?? '').trim();
                           const orderParts: string[] = [];
@@ -241,6 +243,9 @@ export default function POCartPage() {
                                     });
                                   }}
                                 />
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {recommendedQty > 0 ? recommendedQty.toLocaleString() : '-'}
                               </TableCell>
                               <TableCell className="text-right">
                                 <Input

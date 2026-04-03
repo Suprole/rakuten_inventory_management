@@ -3,6 +3,7 @@ export type CartLine = {
   name: string;
   qty: number;
   unit_cost: number;
+  recommended_qty?: number;
   // 参照専用の発注情報（任意・文字列）
   order_pack?: string;
   order_unit?: string;
@@ -55,6 +56,7 @@ function normalizeCart(raw: unknown): Cart {
     const unit_cost = typeof r.unit_cost === 'number' ? Math.max(0, r.unit_cost) : 0;
     const qty0 = typeof r.qty === 'number' ? r.qty : 0;
     const qty = Math.max(0, qty0);
+    const recommended_qty = typeof r.recommended_qty === 'number' ? Math.max(0, r.recommended_qty) : undefined;
     const added_at = typeof r.added_at === 'number' ? r.added_at : 0;
     const order_pack =
       typeof r.order_pack === 'string'
@@ -71,6 +73,7 @@ function normalizeCart(raw: unknown): Cart {
       name,
       qty,
       unit_cost,
+      recommended_qty,
       order_pack,
       order_unit,
       order_amount,
@@ -175,6 +178,7 @@ export function addToCart(params: {
   name: string;
   qty: number;
   unit_cost: number;
+  recommended_qty?: number;
   order_pack?: string;
   order_unit?: string;
   order_amount?: string;
@@ -188,6 +192,8 @@ export function addToCart(params: {
     const name = String(params.name || '').trim() || internal_id;
     const unit_cost = Math.max(0, Number(params.unit_cost || 0));
     const incomingQty = Math.max(0, Number(params.qty || 0));
+    const recommendedQty =
+      params.recommended_qty !== undefined ? Math.max(0, Number(params.recommended_qty || 0)) : undefined;
 
     const idx = prev.lines.findIndex((l) => l.internal_id === internal_id);
     if (idx < 0) {
@@ -196,6 +202,7 @@ export function addToCart(params: {
         name,
         qty: incomingQty,
         unit_cost,
+        recommended_qty: recommendedQty,
         order_pack: params.order_pack,
         order_unit: params.order_unit,
         order_amount: params.order_amount,
@@ -212,6 +219,7 @@ export function addToCart(params: {
       ...existing,
       name: existing.name || name,
       qty,
+      recommended_qty: existing.recommended_qty ?? recommendedQty,
       // 参照専用情報も、既存に無ければ補完（カートに入れ直し/追加時に埋められる）
       order_pack: existing.order_pack ?? params.order_pack,
       order_unit: existing.order_unit ?? params.order_unit,
@@ -231,7 +239,7 @@ export function updateLine(
   patch: Partial<
     Pick<
       CartLine,
-      'name' | 'qty' | 'unit_cost' | 'order_pack' | 'order_unit' | 'order_amount' | 'basis_need_qty' | 'basis_days_of_cover'
+      'name' | 'qty' | 'unit_cost' | 'recommended_qty' | 'order_pack' | 'order_unit' | 'order_amount' | 'basis_need_qty' | 'basis_days_of_cover'
     >
   >
 ) {
@@ -245,6 +253,8 @@ export function updateLine(
       name: patch.name !== undefined ? String(patch.name) : cur.name,
       unit_cost: patch.unit_cost !== undefined ? Math.max(0, Number(patch.unit_cost)) : cur.unit_cost,
       qty: patch.qty !== undefined ? Math.max(0, Number(patch.qty)) : cur.qty,
+      recommended_qty:
+        patch.recommended_qty !== undefined ? Math.max(0, Number(patch.recommended_qty)) : cur.recommended_qty,
       order_pack: patch.order_pack !== undefined ? String(patch.order_pack) : cur.order_pack,
       order_unit: patch.order_unit !== undefined ? String(patch.order_unit) : cur.order_unit,
       order_amount: patch.order_amount !== undefined ? String(patch.order_amount) : cur.order_amount,
