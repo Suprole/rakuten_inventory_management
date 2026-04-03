@@ -629,6 +629,34 @@ function csvEscape_(v) {
   return s;
 }
 
+function getItemNameMap_(internalIds) {
+  var out = {};
+  if (!internalIds || !internalIds.length) return out;
+
+  try {
+    var t = readTable_('items');
+    if (t.header['internal_id'] === undefined || t.header['name'] === undefined) return out;
+
+    var wanted = {};
+    for (var i = 0; i < internalIds.length; i++) {
+      var internalId = toStringSafe(internalIds[i]);
+      if (!internalId) continue;
+      wanted[internalId] = true;
+    }
+
+    for (var r = 0; r < t.rows.length; r++) {
+      var row = t.rows[r];
+      var rowInternalId = toStringSafe(row[t.header['internal_id']]);
+      if (!rowInternalId || !wanted[rowInternalId]) continue;
+      out[rowInternalId] = toStringSafe(row[t.header['name']]);
+    }
+  } catch (e) {
+    Logger.log('[getItemNameMap_] failed: ' + (e && e.message ? e.message : String(e)));
+  }
+
+  return out;
+}
+
 function buildPoCsv_(poId, sentDate, supplierVal, noteVal, lines) {
   var rows = [];
   // 先頭にBOM（Excel向け）
@@ -638,13 +666,13 @@ function buildPoCsv_(poId, sentDate, supplierVal, noteVal, lines) {
   if (supplierVal) rows.push(['サプライヤー', supplierVal]);
   if (noteVal) rows.push(['備考', noteVal]);
   rows.push([]); // 空行
-  rows.push(['発注ID', '商品コード', '数量(個)', '単価', '合計額']);
+  rows.push(['発注ID', '商品コード', '商品名', '数量(個)', '単価', '合計額']);
   for (var i = 0; i < lines.length; i++) {
     var ln = lines[i];
     var qty = Number(ln.qty || 0);
     var unitCost = ln.unit_cost !== undefined ? Number(ln.unit_cost) : 0;
     var amt = qty * unitCost;
-    rows.push([poId, ln.internal_id, qty, yen_(unitCost), yen_(amt)]);
+    rows.push([poId, ln.internal_id, ln.item_name || '', qty, yen_(unitCost), yen_(amt)]);
   }
   var totalQty = 0;
   var totalAmount = 0;
@@ -679,6 +707,7 @@ function buildPoPdfBlob_(poId, sentDate, supplierVal, noteVal, lines, totalQty, 
       '<tr>' +
         '<td style="border:1px solid #444;padding:6px;white-space:nowrap;">' + escapeHtml_(poId) + '</td>' +
         '<td style="border:1px solid #444;padding:6px;white-space:nowrap;">' + escapeHtml_(ln.internal_id) + '</td>' +
+        '<td style="border:1px solid #444;padding:6px;">' + escapeHtml_(ln.item_name || '') + '</td>' +
         '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(String(qty)) + '</td>' +
         '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(unitCost)) + '</td>' +
         '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(amt)) + '</td>' +
@@ -709,6 +738,7 @@ function buildPoPdfBlob_(poId, sentDate, supplierVal, noteVal, lines, totalQty, 
         '<thead><tr>' +
           '<th>発注ID</th>' +
           '<th>商品コード</th>' +
+          '<th>商品名</th>' +
           '<th class="right">数量(個)</th>' +
           '<th class="right">単価</th>' +
           '<th class="right">合計額</th>' +
@@ -737,6 +767,16 @@ function sendPoEmailOnSent_(poId) {
   if (!detail || !detail.ok) throw new Error('po not found for email: ' + poId);
   var header = detail.header || {};
   var lines = detail.lines || [];
+  var internalIds = [];
+  for (var i = 0; i < lines.length; i++) {
+    var internalId = toStringSafe(lines[i].internal_id);
+    if (!internalId) continue;
+    internalIds.push(internalId);
+  }
+  var itemNameMap = getItemNameMap_(internalIds);
+  for (var j = 0; j < lines.length; j++) {
+    lines[j].item_name = itemNameMap[toStringSafe(lines[j].internal_id)] || '';
+  }
 
   var sentDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
   var subject = '【発注依頼】楽天・Yahooショップ用 - ' + sentDate + ' (' + lines.length + '件)';
@@ -758,6 +798,7 @@ function sendPoEmailOnSent_(poId) {
       '<tr>' +
         '<td style="border:1px solid #ddd;padding:6px;white-space:nowrap;">' + escapeHtml_(poId) + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;white-space:nowrap;">' + escapeHtml_(ln.internal_id) + '</td>' +
+        '<td style="border:1px solid #ddd;padding:6px;">' + escapeHtml_(ln.item_name || '') + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(String(qty)) + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(unitCost)) + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(amt)) + '</td>' +
@@ -779,6 +820,7 @@ function sendPoEmailOnSent_(poId) {
           '<tr style="background:#f5f5f5;">' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:left;">発注ID</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:left;">商品コード</th>' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:left;">商品名</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">数量(個)</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">単価</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">合計額</th>' +
@@ -800,6 +842,11 @@ function sendPoEmailOnSent_(poId) {
     (supplierVal ? 'サプライヤー: ' + supplierVal + '\n' : '') +
     (noteVal ? '備考: ' + noteVal + '\n' : '') +
     '\n' +
+    '明細:\n' +
+    lines.map(function (ln) {
+      return '- ' + ln.internal_id + (ln.item_name ? ' / ' + ln.item_name : '') + ' / 数量: ' + Number(ln.qty || 0);
+    }).join('\n') +
+    '\n\n' +
     '件数: ' + lines.length + '\n' +
     '合計数量: ' + totalQty + '\n' +
     '合計発注額: ' + Math.round(totalAmount) + '\n';

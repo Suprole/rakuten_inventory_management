@@ -173,7 +173,7 @@ export default function POCartPage() {
                   )}
                 </CardTitle>
                 <CardDescription>
-                  数量はロット単位に自動丸めされます（ロット変更時も再丸め）
+                  ケース入り数を確認しながら、発注数量を手動で入力できます
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
@@ -183,7 +183,7 @@ export default function POCartPage() {
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="font-semibold">社内ID</TableHead>
                         <TableHead className="font-semibold">商品名</TableHead>
-                        <TableHead className="text-right font-semibold">ロット</TableHead>
+                        <TableHead className="font-semibold">ケース入り数</TableHead>
                         <TableHead className="text-right font-semibold">発注数量</TableHead>
                         <TableHead className="text-right font-semibold">単価</TableHead>
                         <TableHead className="text-right font-semibold">金額</TableHead>
@@ -210,7 +210,6 @@ export default function POCartPage() {
                           const orderUnit = (latest?.order_unit ?? line.order_unit ?? '').trim();
                           const orderAmount = (latest?.order_amount ?? line.order_amount ?? '').trim();
                           const orderParts: string[] = [];
-                          if (orderPack) orderParts.push(`入数: ${orderPack}`);
                           if (orderUnit) orderParts.push(`発注単位: ${orderUnit}`);
                           if (orderAmount) orderParts.push(`発注金額: ${orderAmount}`);
                           const orderInfo = orderParts.join(' / ');
@@ -231,16 +230,14 @@ export default function POCartPage() {
                                   </div>
                                 )}
                               </TableCell>
-                              <TableCell className="text-right">
+                              <TableCell>
                                 <Input
-                                  type="number"
-                                  className="w-24 text-right"
-                                  min={1}
-                                  step={1}
-                                  value={line.lot_size}
+                                  type="text"
+                                  className="w-28"
+                                  value={orderPack}
                                   onChange={(e) => {
                                     cart.actions.updateLine(line.internal_id, {
-                                      lot_size: parseInt(e.target.value) || 1,
+                                      order_pack: e.target.value,
                                     });
                                   }}
                                 />
@@ -250,7 +247,7 @@ export default function POCartPage() {
                                   type="number"
                                   className="w-24 text-right"
                                   min={0}
-                                  step={line.lot_size}
+                                  step={1}
                                   value={line.qty}
                                   onChange={(e) => {
                                     cart.actions.updateLine(line.internal_id, {

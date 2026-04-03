@@ -347,16 +347,11 @@ export default function ItemDetailPage() {
                       className="w-full"
                       size="lg"
                       onClick={() => {
-                        const qty =
-                          item.reorder_qty_suggested > 0
-                            ? item.reorder_qty_suggested
-                            : item.lot_size;
                         cart.actions.addToCart({
                           internal_id: item.internal_id,
                           name: item.name,
-                          qty,
+                          qty: item.reorder_qty_suggested > 0 ? item.reorder_qty_suggested : 0,
                           unit_cost: item.default_unit_cost ?? 0,
-                          lot_size: item.lot_size,
                           order_pack: item.order_pack,
                           order_unit: item.order_unit,
                           order_amount: item.order_amount,

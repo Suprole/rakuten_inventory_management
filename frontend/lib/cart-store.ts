@@ -3,7 +3,6 @@ export type CartLine = {
   name: string;
   qty: number;
   unit_cost: number;
-  lot_size: number;
   // 参照専用の発注情報（任意・文字列）
   order_pack?: string;
   order_unit?: string;
@@ -32,12 +31,6 @@ function nowMs() {
   return Date.now();
 }
 
-function ceilToLot(qty: number, lot: number) {
-  const l = Math.max(1, Number.isFinite(lot) ? lot : 1);
-  const q = Math.max(0, Number.isFinite(qty) ? qty : 0);
-  return Math.ceil(q / l) * l;
-}
-
 function defaultCart(): Cart {
   return { version: 1, supplier: '', note: '', lines: [], updated_at: 0 };
 }
@@ -60,11 +53,15 @@ function normalizeCart(raw: unknown): Cart {
     if (!internal_id) continue;
     const name = typeof r.name === 'string' ? r.name : internal_id;
     const unit_cost = typeof r.unit_cost === 'number' ? Math.max(0, r.unit_cost) : 0;
-    const lot_size = typeof r.lot_size === 'number' ? Math.max(1, Math.floor(r.lot_size)) : 1;
     const qty0 = typeof r.qty === 'number' ? r.qty : 0;
-    const qty = ceilToLot(qty0, lot_size);
+    const qty = Math.max(0, qty0);
     const added_at = typeof r.added_at === 'number' ? r.added_at : 0;
-    const order_pack = typeof r.order_pack === 'string' ? r.order_pack : undefined;
+    const order_pack =
+      typeof r.order_pack === 'string'
+        ? r.order_pack
+        : typeof r.lot_size === 'number'
+          ? String(Math.max(1, Math.floor(r.lot_size)))
+          : undefined;
     const order_unit = typeof r.order_unit === 'string' ? r.order_unit : undefined;
     const order_amount = typeof r.order_amount === 'string' ? r.order_amount : undefined;
     const basis_need_qty = typeof r.basis_need_qty === 'number' ? r.basis_need_qty : undefined;
@@ -74,7 +71,6 @@ function normalizeCart(raw: unknown): Cart {
       name,
       qty,
       unit_cost,
-      lot_size,
       order_pack,
       order_unit,
       order_amount,
@@ -179,31 +175,27 @@ export function addToCart(params: {
   name: string;
   qty: number;
   unit_cost: number;
-  lot_size: number;
   order_pack?: string;
   order_unit?: string;
   order_amount?: string;
   basis_need_qty?: number;
   basis_days_of_cover?: number;
 }): Cart {
-  // 方針: 既に同一internal_idがある場合は「数量加算」して丸め直す（カートらしい動作）。
+  // 方針: 既に同一internal_idがある場合は数量加算。数量は手動入力を尊重し、丸めない。
   return commit((prev) => {
     const internal_id = String(params.internal_id || '').trim();
     if (!internal_id) return prev;
     const name = String(params.name || '').trim() || internal_id;
     const unit_cost = Math.max(0, Number(params.unit_cost || 0));
-    const incomingLot = Math.max(1, Math.floor(Number(params.lot_size || 1)));
     const incomingQty = Math.max(0, Number(params.qty || 0));
 
     const idx = prev.lines.findIndex((l) => l.internal_id === internal_id);
     if (idx < 0) {
-      const qty = ceilToLot(incomingQty, incomingLot);
       const nextLine: CartLine = {
         internal_id,
         name,
-        qty,
+        qty: incomingQty,
         unit_cost,
-        lot_size: incomingLot,
         order_pack: params.order_pack,
         order_unit: params.order_unit,
         order_amount: params.order_amount,
@@ -215,12 +207,10 @@ export function addToCart(params: {
     }
 
     const existing = prev.lines[idx];
-    const lot = existing.lot_size || incomingLot || 1;
-    const qty = ceilToLot((existing.qty || 0) + incomingQty, lot);
+    const qty = Math.max(0, Number(existing.qty || 0) + incomingQty);
     const merged: CartLine = {
       ...existing,
       name: existing.name || name,
-      // 既存の編集値を優先（unit_cost, lot_size）。basisは無ければ補完。
       qty,
       // 参照専用情報も、既存に無ければ補完（カートに入れ直し/追加時に埋められる）
       order_pack: existing.order_pack ?? params.order_pack,
@@ -241,7 +231,7 @@ export function updateLine(
   patch: Partial<
     Pick<
       CartLine,
-      'name' | 'qty' | 'unit_cost' | 'lot_size' | 'order_pack' | 'order_unit' | 'order_amount' | 'basis_need_qty' | 'basis_days_of_cover'
+      'name' | 'qty' | 'unit_cost' | 'order_pack' | 'order_unit' | 'order_amount' | 'basis_need_qty' | 'basis_days_of_cover'
     >
   >
 ) {
@@ -250,19 +240,11 @@ export function updateLine(
     if (idx < 0) return prev;
     const cur = prev.lines[idx];
 
-    const nextLot =
-      patch.lot_size !== undefined
-        ? Math.max(1, Math.floor(Number(patch.lot_size)))
-        : cur.lot_size;
-    const nextQty0 = patch.qty !== undefined ? Number(patch.qty) : cur.qty;
-    const nextQty = ceilToLot(Math.max(0, nextQty0), nextLot);
-
     const next: CartLine = {
       ...cur,
       name: patch.name !== undefined ? String(patch.name) : cur.name,
       unit_cost: patch.unit_cost !== undefined ? Math.max(0, Number(patch.unit_cost)) : cur.unit_cost,
-      lot_size: nextLot,
-      qty: nextQty,
+      qty: patch.qty !== undefined ? Math.max(0, Number(patch.qty)) : cur.qty,
       order_pack: patch.order_pack !== undefined ? String(patch.order_pack) : cur.order_pack,
       order_unit: patch.order_unit !== undefined ? String(patch.order_unit) : cur.order_unit,
       order_amount: patch.order_amount !== undefined ? String(patch.order_amount) : cur.order_amount,
