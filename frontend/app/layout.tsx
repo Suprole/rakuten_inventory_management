@@ -1,12 +1,8 @@
 import React from "react"
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { AuthSessionProvider } from '@/components/session-provider'
-
-const geist = Geist({ subsets: ["latin"] });
-const geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: '楽天2店舗ミラー在庫管理システム',
@@ -39,7 +35,7 @@ export default function RootLayout({
   const enableAnalytics = process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === '1';
   return (
     <html lang="ja">
-      <body className={`${geist.className} ${geistMono.className} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <AuthSessionProvider>{children}</AuthSessionProvider>
         {enableAnalytics ? <Analytics /> : null}
       </body>
