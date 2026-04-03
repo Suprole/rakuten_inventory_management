@@ -6,8 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Package, ShoppingCart, AlertTriangle, TrendingUp, AlertCircle } from 'lucide-react';
 import { useItemMetrics, useMirrorMismatches, useUnmappedListings } from '@/lib/use-view';
+import { useSession } from 'next-auth/react';
 
 export default function HomePage() {
+  const session = useSession();
+  const canViewMonitorCards = (session.data?.user?.email || '').trim().toLowerCase() === 'info@suprole.com';
   const itemMetricsState = useItemMetrics();
   const mismatchState = useMirrorMismatches();
   const unmappedState = useUnmappedListings();
@@ -138,22 +141,24 @@ export default function HomePage() {
             </CardContent>
           </Card>
 
-          <Card className="border-destructive/50 bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <AlertCircle className="h-4 w-4 text-destructive" />
-                BOM未紐付け
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-destructive">
-                {unmappedState.status === 'loading' ? '-' : unmapped.length}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                計算対象外SKU
-              </p>
-            </CardContent>
-          </Card>
+          {canViewMonitorCards && (
+            <Card className="border-destructive/50 bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                  BOM未紐付け
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-destructive">
+                  {unmappedState.status === 'loading' ? '-' : unmapped.length}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  計算対象外SKU
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {itemMetricsState.status === 'error' && (
@@ -250,7 +255,7 @@ export default function HomePage() {
           </Card>
         </div>
 
-        {mismatchState.status === 'success' && mismatches.length > 0 && (
+        {canViewMonitorCards && mismatchState.status === 'success' && mismatches.length > 0 && (
           <Card className="mt-6 border-destructive">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
@@ -273,7 +278,7 @@ export default function HomePage() {
           </Card>
         )}
 
-        {unmappedState.status === 'success' && unmapped.length > 0 && (
+        {canViewMonitorCards && unmappedState.status === 'success' && unmapped.length > 0 && (
           <Card className="mt-3 border-destructive">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
