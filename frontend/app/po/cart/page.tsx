@@ -141,7 +141,7 @@ export default function POCartPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-[96rem] px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <Link href="/items">
             <Button variant="ghost" className="mb-4">
@@ -187,8 +187,8 @@ export default function POCartPage() {
                 ケース入り数を確認しながら、発注数量を手動で入力できます
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
+            <CardContent className="p-4">
+              <div className="overflow-x-auto rounded-md border border-border">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
@@ -308,7 +308,7 @@ export default function POCartPage() {
               </div>
 
               {cart.lineCount > 0 && totalPages > 1 && (
-                <div className="flex flex-col items-center justify-between gap-3 border-t border-border px-4 py-4 sm:flex-row">
+                <div className="flex flex-col items-center justify-between gap-3 px-1 py-4 sm:flex-row">
                   <div className="text-sm text-muted-foreground">
                     {`${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, cart.lineCount)} / ${cart.lineCount} 件`}
                   </div>
