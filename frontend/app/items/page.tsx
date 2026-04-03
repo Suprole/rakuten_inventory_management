@@ -37,6 +37,7 @@ type SortField =
   | 'internal_id'
   | 'name'
   | 'derived_stock'
+  | 'inventory_amount'
   | 'sales_last_month'
   | 'sales_this_month'
   | 'days_of_cover'
@@ -47,6 +48,7 @@ const SORT_FIELDS: SortField[] = [
   'internal_id',
   'name',
   'derived_stock',
+  'inventory_amount',
   'sales_last_month',
   'sales_this_month',
   'days_of_cover',
@@ -185,6 +187,8 @@ export default function ItemsPage() {
             return item.name;
           case 'derived_stock':
             return item.derived_stock;
+          case 'inventory_amount':
+            return item.derived_stock * (item.default_unit_cost ?? 0);
           case 'sales_last_month': {
             const m = item.metro_last_month_sales ?? 0;
             const w = item.windy_last_month_sales ?? 0;
@@ -553,7 +557,7 @@ export default function ItemsPage() {
     <Suspense fallback={<Loading />}>
       <div className="min-h-screen bg-background">
         <Navigation />
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <main className="w-full px-2 py-8 sm:px-3 lg:px-4">
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <h1 className="flex items-center gap-2 text-3xl font-bold text-foreground">
@@ -711,8 +715,14 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="sticky top-0 z-20 w-[120px] bg-card text-right font-semibold">
-                        在庫金額
+                      <TableHead
+                        className="sticky top-0 z-20 w-[120px] cursor-pointer bg-card text-right font-semibold hover:text-foreground"
+                        onClick={() => handleSort('inventory_amount')}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          在庫金額
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
                       </TableHead>
                       <TableHead
                         className="sticky top-0 z-20 w-[140px] cursor-pointer bg-card pl-2 pr-2 text-right font-semibold hover:text-foreground"
