@@ -1,19 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigation } from '@/components/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -43,6 +36,8 @@ type SortField =
   | 'days_of_cover'
   | 'reorder_qty_suggested';
 type SortDirection = 'asc' | 'desc';
+type RiskFilter = 'all' | ItemMetric['risk_level'];
+type LastSentInfo = { last_sent_at: string; last_po_id: string };
 
 const SORT_FIELDS: SortField[] = [
   'internal_id',
@@ -55,11 +50,40 @@ const SORT_FIELDS: SortField[] = [
   'reorder_qty_suggested',
 ];
 
+const RISK_VARIANTS: Record<ItemMetric['risk_level'], string> = {
+  red: 'bg-destructive text-destructive-foreground',
+  yellow: 'bg-warning text-warning-foreground',
+  green: 'bg-success text-success-foreground',
+  surplus: 'bg-surplus text-surplus-foreground',
+  dormant: 'bg-dormant text-dormant-foreground',
+};
+
+const RISK_LABELS: Record<ItemMetric['risk_level'], string> = {
+  red: '危険',
+  yellow: '警告',
+  green: '安全',
+  surplus: '余剰',
+  dormant: '休眠',
+};
+
+const RISK_FILTER_OPTIONS: Array<{ value: RiskFilter; label: string }> = [
+  { value: 'all', label: 'すべて' },
+  { value: 'red', label: '危険' },
+  { value: 'yellow', label: '警告' },
+  { value: 'green', label: '安全' },
+  { value: 'surplus', label: '余剰' },
+  { value: 'dormant', label: '休眠' },
+];
+
 function parseSortField(v: string | null): SortField {
   return (v && SORT_FIELDS.includes(v as SortField) ? (v as SortField) : 'days_of_cover');
 }
 function parseSortDirection(v: string | null): SortDirection {
   return v === 'desc' ? 'desc' : 'asc';
+}
+
+function parseRiskFilter(v: string | null): RiskFilter {
+  return v === 'red' || v === 'yellow' || v === 'green' || v === 'surplus' || v === 'dormant' ? v : 'all';
 }
 
 function matchesItemQuery(item: ItemMetric, q: string): boolean {
@@ -94,12 +118,188 @@ function formatYen(value: number): string {
   return `¥${Math.round(value || 0).toLocaleString()}`;
 }
 
+function getRiskBadge(level: ItemMetric['risk_level']) {
+  return <Badge className={cn('font-medium', RISK_VARIANTS[level])}>{RISK_LABELS[level]}</Badge>;
+}
+
+function getRiskLabel(level: ItemMetric['risk_level']) {
+  return RISK_LABELS[level];
+}
+
+function formatDaysOfCover(item: ItemMetric) {
+  if (item.derived_stock === 0) {
+    return '0.0';
+  }
+  if (item.avg_daily_consumption === 0) {
+    return '∞';
+  }
+  return (item.days_of_cover ?? 0).toFixed(1);
+}
+
+function formatSales(v: number | null | undefined) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '-';
+  return v.toLocaleString();
+}
+
+function formatDateOnly(dateString: string) {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+const SalesInline = memo(function SalesInline({
+  metro,
+  windy,
+  yahoo,
+}: {
+  metro: number | null | undefined;
+  windy: number | null | undefined;
+  yahoo: number | null | undefined;
+}) {
+  return (
+    <div className="flex justify-end gap-1 whitespace-nowrap font-mono text-xs tabular-nums">
+      <span>
+        <span className="text-muted-foreground">M</span>
+        {formatSales(metro)}
+      </span>
+      <span>
+        <span className="text-muted-foreground">W</span>
+        {formatSales(windy)}
+      </span>
+      <span>
+        <span className="text-muted-foreground">Y</span>
+        {formatSales(yahoo)}
+      </span>
+    </div>
+  );
+});
+
+const ItemTableRow = memo(function ItemTableRow({
+  item,
+  lastSent,
+  inCart,
+  onOpenItem,
+  onOpenCart,
+  onAddToCart,
+}: {
+  item: ItemMetric;
+  lastSent?: LastSentInfo;
+  inCart: boolean;
+  onOpenItem: (internalId: string) => void;
+  onOpenCart: () => void;
+  onAddToCart: (item: ItemMetric) => void;
+}) {
+  const inventoryAmount = item.derived_stock * (item.default_unit_cost ?? 0);
+
+  return (
+    <TableRow
+      className="cursor-pointer hover:bg-accent/50"
+      role="link"
+      tabIndex={0}
+      onClick={() => onOpenItem(item.internal_id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpenItem(item.internal_id);
+        }
+      }}
+    >
+      <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
+      <TableCell className="font-mono text-sm">{item.internal_id}</TableCell>
+      <TableCell className="whitespace-nowrap text-xs">
+        {!lastSent || !lastSent.last_sent_at ? (
+          <span className="text-muted-foreground">-</span>
+        ) : (
+          <span title={`PO: ${lastSent.last_po_id}`}>{formatDateOnly(lastSent.last_sent_at)}</span>
+        )}
+      </TableCell>
+      <TableCell className="font-medium">
+        <span title={item.name} className="block max-w-[220px] truncate">
+          {item.name}
+        </span>
+      </TableCell>
+      <TableCell className="text-right font-mono pr-2">{item.derived_stock.toLocaleString()}</TableCell>
+      <TableCell className="text-right font-mono pr-2">{formatYen(inventoryAmount)}</TableCell>
+      <TableCell className="text-right pl-2 pr-2">
+        <SalesInline
+          metro={item.metro_last_month_sales}
+          windy={item.windy_last_month_sales}
+          yahoo={item.yahoo_last_month_sales}
+        />
+      </TableCell>
+      <TableCell className="text-right pl-2">
+        <SalesInline
+          metro={item.metro_this_month_sales}
+          windy={item.windy_this_month_sales}
+          yahoo={item.yahoo_this_month_sales}
+        />
+      </TableCell>
+      <TableCell className="text-right font-mono">
+        <span
+          className={cn(
+            item.risk_level === 'red' && 'text-destructive',
+            item.risk_level === 'yellow' && 'text-warning',
+            item.risk_level === 'green' && 'text-success',
+            item.risk_level === 'surplus' && 'text-surplus',
+            item.risk_level === 'dormant' && 'text-dormant'
+          )}
+        >
+          {formatDaysOfCover(item)}日
+        </span>
+      </TableCell>
+      <TableCell className="text-right font-mono">
+        {item.reorder_qty_suggested > 0 ? (
+          <span className="font-semibold text-primary">{item.reorder_qty_suggested.toLocaleString()}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell>
+        {inCart ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-transparent"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenCart();
+            }}
+          >
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            カートへ
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-transparent"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onAddToCart(item);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            追加
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+});
+
 export default function ItemsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams?.get('query') || '');
   const [internalIdsRaw, setInternalIdsRaw] = useState(searchParams?.get('ids') || '');
-  const [riskFilter, setRiskFilter] = useState<string>(searchParams?.get('risk') || 'all');
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>(parseRiskFilter(searchParams?.get('risk') || null));
   const [sortField, setSortField] = useState<SortField>(parseSortField(searchParams?.get('sort') || null));
   const [sortDirection, setSortDirection] = useState<SortDirection>(parseSortDirection(searchParams?.get('dir') || null));
 
@@ -107,6 +307,7 @@ export default function ItemsPage() {
   const itemMetrics = useMemo(() => itemMetricsState.data ?? [], [itemMetricsState.data]);
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
   const debouncedInternalIdsRaw = useDebouncedValue(internalIdsRaw, 300);
+  const debouncedRiskFilter = useDebouncedValue(riskFilter, 180);
   const cart = useCart();
   const lastSentState = usePoLastSentByItem();
   const lastSentItems = useMemo(() => lastSentState.data ?? [], [lastSentState.data]);
@@ -124,27 +325,27 @@ export default function ItemsPage() {
     return (internalId: string) => set.has(internalId);
   }, [lines]);
 
-  // URLクエリ同期（検索はdebounce、フィルタ/ソートは即時）
+  // URLクエリ同期（検索とリスクはdebounceし、テーブル反映の体感を優先）
   useEffect(() => {
     const params = new URLSearchParams();
     const q = debouncedQuery.trim();
     const ids = debouncedInternalIdsRaw.trim();
     if (q) params.set('query', q);
     if (ids) params.set('ids', ids);
-    if (riskFilter && riskFilter !== 'all') params.set('risk', riskFilter);
+    if (debouncedRiskFilter !== 'all') params.set('risk', debouncedRiskFilter);
     if (sortField !== 'days_of_cover') params.set('sort', sortField);
     if (sortDirection !== 'asc') params.set('dir', sortDirection);
 
     const qs = params.toString();
     const url = qs ? `/items?${qs}` : '/items';
     router.replace(url, { scroll: false });
-  }, [debouncedQuery, debouncedInternalIdsRaw, riskFilter, sortField, sortDirection, router]);
+  }, [debouncedQuery, debouncedInternalIdsRaw, debouncedRiskFilter, sortField, sortDirection, router]);
 
   // 戻る/進む等でURLが変わったとき、入力状態に追従
   useEffect(() => {
     const q = searchParams?.get('query') || '';
     const ids = searchParams?.get('ids') || '';
-    const r = searchParams?.get('risk') || 'all';
+    const r = parseRiskFilter(searchParams?.get('risk') || null);
     const sf = parseSortField(searchParams?.get('sort') || null);
     const sd = parseSortDirection(searchParams?.get('dir') || null);
     if (q !== searchQuery) setSearchQuery(q);
@@ -270,63 +471,6 @@ export default function ItemsPage() {
     }
   };
 
-  const getRiskBadge = (level: ItemMetric['risk_level']) => {
-    const variants = {
-      red: 'bg-destructive text-destructive-foreground',
-      yellow: 'bg-warning text-warning-foreground',
-      green: 'bg-success text-success-foreground',
-      surplus: 'bg-surplus text-surplus-foreground',
-      dormant: 'bg-dormant text-dormant-foreground',
-    };
-    const labels = {
-      red: '危険',
-      yellow: '警告',
-      green: '安全',
-      surplus: '余剰',
-      dormant: '休眠',
-    };
-    return (
-      <Badge className={cn('font-medium', variants[level])}>{labels[level]}</Badge>
-    );
-  };
-
-  const getRiskLabel = (level: ItemMetric['risk_level']) => {
-    const labels: Record<ItemMetric['risk_level'], string> = {
-      red: '危険',
-      yellow: '警告',
-      green: '安全',
-      surplus: '余剰',
-      dormant: '休眠',
-    };
-    return labels[level];
-  };
-
-  const formatDaysOfCover = (item: ItemMetric) => {
-    if (item.derived_stock === 0) {
-      return '0.0';
-    }
-    if (item.avg_daily_consumption === 0) {
-      return '∞';
-    }
-    return (item.days_of_cover ?? 0).toFixed(1);
-  };
-
-  const formatSales = (v: number | null | undefined) => {
-    if (v === null || v === undefined || Number.isNaN(v)) return '-';
-    return v.toLocaleString();
-  };
-
-  const formatDateOnly = (dateString: string) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) return '-';
-    return new Intl.DateTimeFormat('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(date);
-  };
-
   // 二重発注防止目的：索引は軽量なので短い間隔で再取得（画面表示中のみ）
   useEffect(() => {
     const intervalMs = 30_000;
@@ -339,158 +483,44 @@ export default function ItemsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const SalesInline = ({
-    metro,
-    windy,
-    yahoo,
-  }: {
-    metro: number | null | undefined;
-    windy: number | null | undefined;
-    yahoo: number | null | undefined;
-  }) => {
-    // 省スペース表示（M/W/Y を常時表示）
-    return (
-      <div className="flex justify-end gap-1 whitespace-nowrap font-mono text-xs tabular-nums">
-        <span>
-          <span className="text-muted-foreground">M</span>
-          {formatSales(metro)}
-        </span>
-        <span>
-          <span className="text-muted-foreground">W</span>
-          {formatSales(windy)}
-        </span>
-        <span>
-          <span className="text-muted-foreground">Y</span>
-          {formatSales(yahoo)}
-        </span>
-      </div>
-    );
-  };
+  const openItemDetail = useCallback((internalId: string) => {
+    router.push(`/items/${internalId}`);
+  }, [router]);
 
-  const renderItemRow = (item: ItemMetric) => {
-    const inventoryAmount = item.derived_stock * (item.default_unit_cost ?? 0);
+  const openCart = useCallback(() => {
+    router.push('/po/cart');
+  }, [router]);
 
-    return (
-      <TableRow
-        key={item.internal_id}
-        className="cursor-pointer hover:bg-accent/50"
-        role="link"
-        tabIndex={0}
-        onClick={() => router.push(`/items/${item.internal_id}`)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            router.push(`/items/${item.internal_id}`);
-          }
-        }}
-      >
-        <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
-        <TableCell className="font-mono text-sm">
-          {item.internal_id}
-        </TableCell>
-        <TableCell className="whitespace-nowrap text-xs">
-          {(() => {
-            const x = lastSentByInternalId.get(item.internal_id);
-            if (!x || !x.last_sent_at) return <span className="text-muted-foreground">-</span>;
-            return (
-              <span title={`PO: ${x.last_po_id}`}>
-                {formatDateOnly(x.last_sent_at)}
-              </span>
-            );
-          })()}
-        </TableCell>
-        <TableCell className="font-medium">
-          <span title={item.name} className="block max-w-[220px] truncate">
-            {item.name}
-          </span>
-        </TableCell>
-        <TableCell className="text-right font-mono pr-2">
-          {item.derived_stock.toLocaleString()}
-        </TableCell>
-        <TableCell className="text-right font-mono pr-2">
-          {formatYen(inventoryAmount)}
-        </TableCell>
-        <TableCell className="text-right pl-2 pr-2">
-          <SalesInline
-            metro={item.metro_last_month_sales}
-            windy={item.windy_last_month_sales}
-            yahoo={item.yahoo_last_month_sales}
-          />
-        </TableCell>
-        <TableCell className="text-right pl-2">
-          <SalesInline
-            metro={item.metro_this_month_sales}
-            windy={item.windy_this_month_sales}
-            yahoo={item.yahoo_this_month_sales}
-          />
-        </TableCell>
-        <TableCell className="text-right font-mono">
-          <span
-            className={cn(
-              item.risk_level === 'red' && 'text-destructive',
-              item.risk_level === 'yellow' && 'text-warning',
-              item.risk_level === 'green' && 'text-success',
-              item.risk_level === 'surplus' && 'text-surplus',
-              item.risk_level === 'dormant' && 'text-dormant'
-            )}
-          >
-            {formatDaysOfCover(item)}日
-          </span>
-        </TableCell>
-        <TableCell className="text-right font-mono">
-          {item.reorder_qty_suggested > 0 ? (
-            <span className="font-semibold text-primary">
-              {item.reorder_qty_suggested.toLocaleString()}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          )}
-        </TableCell>
-        <TableCell>
-          {isInCart(item.internal_id) ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-transparent"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                router.push('/po/cart');
-              }}
-            >
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              カートへ
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-transparent"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                cart.actions.addToCart({
-                  internal_id: item.internal_id,
-                  name: item.name,
-                  qty: 0,
-                  unit_cost: item.default_unit_cost ?? 0,
-                  recommended_qty: item.reorder_qty_suggested,
-                  order_pack: item.order_pack,
-                  order_unit: item.order_unit,
-                  order_amount: item.order_amount,
-                  basis_need_qty: item.need_qty,
-                  basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
-                });
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              追加
-            </Button>
-          )}
-        </TableCell>
-      </TableRow>
-    );
-  };
+  const addToCart = useCallback((item: ItemMetric) => {
+    cart.actions.addToCart({
+      internal_id: item.internal_id,
+      name: item.name,
+      qty: 0,
+      unit_cost: item.default_unit_cost ?? 0,
+      recommended_qty: item.reorder_qty_suggested,
+      order_pack: item.order_pack,
+      order_unit: item.order_unit,
+      order_amount: item.order_amount,
+      basis_need_qty: item.need_qty,
+      basis_days_of_cover: item.days_of_cover === null ? undefined : item.days_of_cover,
+    });
+  }, [cart.actions]);
+
+  const renderedRows = useMemo(
+    () =>
+      filteredAndSortedItems.map((item) => (
+        <ItemTableRow
+          key={item.internal_id}
+          item={item}
+          lastSent={lastSentByInternalId.get(item.internal_id)}
+          inCart={isInCart(item.internal_id)}
+          onOpenItem={openItemDetail}
+          onOpenCart={openCart}
+          onAddToCart={addToCart}
+        />
+      )),
+    [filteredAndSortedItems, lastSentByInternalId, isInCart, openItemDetail, openCart, addToCart]
+  );
 
   const downloadCsv = () => {
     const rows: string[][] = [];
@@ -568,11 +598,7 @@ export default function ItemsPage() {
                 社内ID単位での在庫状況・需要予測・発注推奨
               </p>
             </div>
-            <Button
-              variant="outline"
-              className="bg-transparent"
-              onClick={() => router.push('/po/cart')}
-            >
+            <Button variant="outline" className="bg-transparent" onClick={openCart}>
               <ShoppingCart className="mr-2 h-4 w-4" />
               カート
               {cart.lineCount > 0 && (
@@ -626,19 +652,34 @@ export default function ItemsPage() {
                     disabled={itemMetrics.length === 0 && itemMetricsState.status === 'loading'}
                   />
                 </div>
-                <Select value={riskFilter} onValueChange={setRiskFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="リスクレベル" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">すべて</SelectItem>
-                    <SelectItem value="red">危険（赤）</SelectItem>
-                    <SelectItem value="yellow">警告（黄）</SelectItem>
-                    <SelectItem value="green">安全（緑）</SelectItem>
-                    <SelectItem value="surplus">余剰（青）</SelectItem>
-                    <SelectItem value="dormant">休眠（灰）</SelectItem>
-                  </SelectContent>
-                </Select>
+              </div>
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-foreground">リスクレベル</div>
+                <div className="flex flex-wrap gap-2">
+                  {RISK_FILTER_OPTIONS.map((option) => {
+                    const active = riskFilter === option.value;
+                    return (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        size="sm"
+                        variant={active ? 'default' : 'outline'}
+                        className={cn(
+                          'bg-transparent',
+                          active && option.value !== 'all' && 'border-transparent text-primary-foreground',
+                          active && option.value === 'red' && 'bg-destructive hover:bg-destructive/90',
+                          active && option.value === 'yellow' && 'bg-warning hover:bg-warning/90',
+                          active && option.value === 'green' && 'bg-success hover:bg-success/90',
+                          active && option.value === 'surplus' && 'bg-surplus hover:bg-surplus/90',
+                          active && option.value === 'dormant' && 'bg-dormant hover:bg-dormant/90'
+                        )}
+                        onClick={() => setRiskFilter(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
@@ -809,7 +850,7 @@ export default function ItemsPage() {
                           </TableCell>
                           <TableCell className="sticky top-10 z-10 bg-muted/70" />
                         </TableRow>
-                        {filteredAndSortedItems.map(renderItemRow)}
+                        {renderedRows}
                       </>
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
@@ -856,7 +897,7 @@ export default function ItemsPage() {
                           </TableCell>
                           <TableCell className="sticky top-10 z-10 bg-muted/70" />
                         </TableRow>
-                        {filteredAndSortedItems.map(renderItemRow)}
+                        {renderedRows}
                       </>
                     )}
                   </TableBody>
