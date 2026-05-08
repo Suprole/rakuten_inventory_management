@@ -7,6 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -33,6 +42,7 @@ import {
   getDisplayRiskTextClass,
   getEffectiveDisplayRisk,
 } from '@/lib/item-risk';
+import type { ItemHandlingRecord } from '@/lib/master-schema';
 
 type SortField =
   | 'internal_id'
@@ -175,19 +185,25 @@ const SalesInline = memo(function SalesInline({
 const ItemTableRow = memo(function ItemTableRow({
   item,
   displayRisk,
+  canOpenDefer,
+  hasDeferredHandling,
   lastSent,
   inCart,
   onOpenItem,
   onOpenCart,
   onAddToCart,
+  onOpenDefer,
 }: {
   item: ItemMetric;
   displayRisk: DisplayRiskLevel;
+  canOpenDefer: boolean;
+  hasDeferredHandling: boolean;
   lastSent?: LastSentInfo;
   inCart: boolean;
   onOpenItem: (internalId: string) => void;
   onOpenCart: () => void;
   onAddToCart: (item: ItemMetric) => void;
+  onOpenDefer: (item: ItemMetric) => void;
 }) {
   const inventoryAmount = item.derived_stock * (item.default_unit_cost ?? 0);
 
@@ -247,35 +263,55 @@ const ItemTableRow = memo(function ItemTableRow({
         )}
       </TableCell>
       <TableCell>
-        {inCart ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {inCart ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-transparent"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenCart();
+              }}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              カートへ
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-transparent"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onAddToCart(item);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              追加
+            </Button>
+          )}
           <Button
-            variant="outline"
+            variant={hasDeferredHandling ? 'default' : 'outline'}
             size="sm"
-            className="bg-transparent"
+            className={cn('bg-transparent', hasDeferredHandling && 'bg-muted text-foreground hover:bg-muted/90')}
+            disabled={!canOpenDefer}
+            title={
+              canOpenDefer
+                ? '発注見送りを設定'
+                : '見送り設定は危険・警告、または見送り設定済みの商品で利用できます'
+            }
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onOpenCart();
+              onOpenDefer(item);
             }}
           >
-            <ShoppingCart className="mr-2 h-4 w-4" />
-            カートへ
+            {hasDeferredHandling ? '見送り設定' : '見送り'}
           </Button>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-transparent"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onAddToCart(item);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            追加
-          </Button>
-        )}
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -309,7 +345,7 @@ export default function ItemsPage() {
     return m;
   }, [lastSentItems]);
   const handlingByInternalId = useMemo(() => {
-    const m = new Map<string, (typeof itemHandlingRecords)[number]>();
+    const m = new Map<string, ItemHandlingRecord>();
     for (const it of itemHandlingRecords) {
       if (!it.internal_id) continue;
       m.set(it.internal_id, it);
@@ -328,6 +364,16 @@ export default function ItemsPage() {
     const set = new Set(lines.map((l) => l.internal_id));
     return (internalId: string) => set.has(internalId);
   }, [lines]);
+  const [handlingDialogItemId, setHandlingDialogItemId] = useState<string | null>(null);
+  const handlingDialogItem = useMemo(
+    () => itemMetrics.find((item) => item.internal_id === handlingDialogItemId),
+    [itemMetrics, handlingDialogItemId]
+  );
+  const [handlingStatusDraft, setHandlingStatusDraft] = useState<'normal' | 'deferred'>('normal');
+  const [handlingUntilDraft, setHandlingUntilDraft] = useState('');
+  const [handlingNoteDraft, setHandlingNoteDraft] = useState('');
+  const [isHandlingSaving, setIsHandlingSaving] = useState(false);
+  const [handlingDialogError, setHandlingDialogError] = useState('');
 
   // URLクエリ同期（検索とリスクはdebounceし、テーブル反映の体感を優先）
   useEffect(() => {
@@ -510,21 +556,78 @@ export default function ItemsPage() {
     });
   }, [cart.actions]);
 
+  const openHandlingDialog = useCallback((item: ItemMetric) => {
+    const current = handlingByInternalId.get(item.internal_id);
+    setHandlingDialogItemId(item.internal_id);
+    setHandlingStatusDraft(current?.handling_status === 'deferred' ? 'deferred' : 'normal');
+    setHandlingUntilDraft(current?.suppress_until || '');
+    setHandlingNoteDraft(current?.note || '');
+    setHandlingDialogError('');
+  }, [handlingByInternalId]);
+
+  const closeHandlingDialog = useCallback((open: boolean) => {
+    if (open) return;
+    if (isHandlingSaving) return;
+    setHandlingDialogItemId(null);
+    setHandlingDialogError('');
+  }, [isHandlingSaving]);
+
+  const saveHandling = useCallback(async () => {
+    if (!handlingDialogItem) return;
+    setIsHandlingSaving(true);
+    setHandlingDialogError('');
+    try {
+      const res = await fetch('/api/master/item-handling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          internal_id: handlingDialogItem.internal_id,
+          handling_status: handlingStatusDraft,
+          suppress_until: handlingStatusDraft === 'deferred' && handlingUntilDraft ? handlingUntilDraft : undefined,
+          note: handlingNoteDraft.trim() || undefined,
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || json.ok === false) {
+        throw new Error(json.message || '見送り設定の保存に失敗しました');
+      }
+      itemHandlingState.refresh();
+      itemMetricsState.refresh();
+      setHandlingDialogItemId(null);
+    } catch (e) {
+      setHandlingDialogError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsHandlingSaving(false);
+    }
+  }, [handlingDialogItem, handlingStatusDraft, handlingUntilDraft, handlingNoteDraft, itemHandlingState, itemMetricsState]);
+
   const renderedRows = useMemo(
     () =>
       filteredAndSortedItems.map((item) => (
+        (() => {
+          const handling = handlingByInternalId.get(item.internal_id);
+          const canOpenDefer =
+            item.risk_level === 'red' ||
+            item.risk_level === 'yellow' ||
+            handling?.handling_status === 'deferred';
+          return (
         <ItemTableRow
           key={item.internal_id}
           item={item}
           displayRisk={displayRiskByInternalId.get(item.internal_id) ?? item.risk_level}
+          canOpenDefer={canOpenDefer}
+          hasDeferredHandling={handling?.handling_status === 'deferred'}
           lastSent={lastSentByInternalId.get(item.internal_id)}
           inCart={isInCart(item.internal_id)}
           onOpenItem={openItemDetail}
           onOpenCart={openCart}
           onAddToCart={addToCart}
+          onOpenDefer={openHandlingDialog}
         />
+          );
+        })()
       )),
-    [filteredAndSortedItems, displayRiskByInternalId, lastSentByInternalId, isInCart, openItemDetail, openCart, addToCart]
+    [filteredAndSortedItems, handlingByInternalId, displayRiskByInternalId, lastSentByInternalId, isInCart, openItemDetail, openCart, addToCart, openHandlingDialog]
   );
 
   const downloadCsv = () => {
@@ -596,6 +699,108 @@ export default function ItemsPage() {
       <div className="min-h-screen bg-background">
         <Navigation />
         <main className="w-full px-2 py-8 sm:px-3 lg:px-4">
+          <Dialog open={handlingDialogItemId !== null} onOpenChange={closeHandlingDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>発注見送り設定</DialogTitle>
+                <DialogDescription>
+                  一覧から直接、危険・警告商品の見送り設定を保存します。
+                </DialogDescription>
+              </DialogHeader>
+              {handlingDialogItem && (
+                <div className="space-y-4">
+                  <div className="rounded-md border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{handlingDialogItem.name}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{handlingDialogItem.internal_id}</div>
+                      </div>
+                      {getRiskBadge(displayRiskByInternalId.get(handlingDialogItem.internal_id) ?? handlingDialogItem.risk_level)}
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      実リスク: {getDisplayRiskLabel(handlingDialogItem.risk_level)}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label>設定</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={handlingStatusDraft === 'deferred' ? 'default' : 'outline'}
+                        className="flex-1"
+                        onClick={() => setHandlingStatusDraft('deferred')}
+                        disabled={isHandlingSaving}
+                      >
+                        見送りにする
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={handlingStatusDraft === 'normal' ? 'default' : 'outline'}
+                        className="flex-1"
+                        onClick={() => setHandlingStatusDraft('normal')}
+                        disabled={isHandlingSaving}
+                      >
+                        解除
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="handling-until">見送り期限</Label>
+                    <Input
+                      id="handling-until"
+                      type="date"
+                      value={handlingUntilDraft}
+                      onChange={(e) => setHandlingUntilDraft(e.target.value)}
+                      disabled={isHandlingSaving || handlingStatusDraft !== 'deferred'}
+                    />
+                    <p className="text-xs text-muted-foreground">未入力なら解除するまで見送りを維持します。</p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="handling-note">理由メモ</Label>
+                    <Textarea
+                      id="handling-note"
+                      value={handlingNoteDraft}
+                      onChange={(e) => setHandlingNoteDraft(e.target.value)}
+                      placeholder="例: 季節商品のため今月は発注見送り"
+                      className="min-h-24"
+                      disabled={isHandlingSaving}
+                    />
+                  </div>
+
+                  {handlingStatusDraft === 'deferred' &&
+                    handlingDialogItem.risk_level !== 'red' &&
+                    handlingDialogItem.risk_level !== 'yellow' && (
+                      <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+                        現在の実リスクは危険・警告ではないため、保存しても表示ステータスは見送りに変わりません。
+                      </div>
+                    )}
+
+                  {handlingDialogError && (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                      {handlingDialogError}
+                    </div>
+                  )}
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="bg-transparent"
+                  onClick={() => closeHandlingDialog(false)}
+                  disabled={isHandlingSaving}
+                >
+                  キャンセル
+                </Button>
+                <Button type="button" onClick={saveHandling} disabled={isHandlingSaving || !handlingDialogItem}>
+                  {isHandlingSaving ? '保存中...' : '保存'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <h1 className="flex items-center gap-2 text-3xl font-bold text-foreground">
@@ -812,7 +1017,7 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="sticky top-0 z-20 w-[104px] bg-card font-semibold">カート</TableHead>
+                      <TableHead className="sticky top-0 z-20 w-[220px] bg-card font-semibold">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
