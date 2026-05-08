@@ -113,7 +113,8 @@ export default function ItemDetailPage() {
   if (!item) {
     notFound();
   }
-  const effectiveDisplayRisk = getEffectiveDisplayRisk(item, currentHandling);
+  const currentItem = item;
+  const effectiveDisplayRisk = getEffectiveDisplayRisk(currentItem, currentHandling);
 
   const getRiskBadge = (level: DisplayRiskLevel) => {
     const variants = {
@@ -150,6 +151,7 @@ export default function ItemDetailPage() {
   };
 
   async function saveHandling(nextStatus: 'normal' | 'deferred') {
+    if (!currentItem) return;
     setIsSaving(true);
     setSaveMessage('');
     setSaveError('');
@@ -158,7 +160,7 @@ export default function ItemDetailPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          internal_id: item.internal_id,
+          internal_id: currentItem.internal_id,
           handling_status: nextStatus,
           suppress_until: nextStatus === 'deferred' && suppressUntil ? suppressUntil : undefined,
           note: handlingNote.trim() || undefined,
@@ -252,11 +254,11 @@ export default function ItemDetailPage() {
                     {effectiveDisplayRisk === 'deferred' && (
                       <p>
                         <span className="font-semibold text-foreground">見送り:</span>
-                        {` 実リスクは${getDisplayRiskLabel(item.risk_level)}です。発注対象から一時的に外しています。`}
+                        {` 実リスクは${getDisplayRiskLabel(currentItem.risk_level)}です。発注対象から一時的に外しています。`}
                         {currentHandling?.suppress_until ? ` 期限: ${currentHandling.suppress_until}` : ''}
                       </p>
                     )}
-                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'red' && (
+                    {effectiveDisplayRisk !== 'deferred' && currentItem.risk_level === 'red' && (
                       <p>
                         <span className="font-semibold text-destructive">
                           危険：
@@ -264,7 +266,7 @@ export default function ItemDetailPage() {
                         在庫日数がリードタイムを下回っています。至急発注してください。
                       </p>
                     )}
-                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'yellow' && (
+                    {effectiveDisplayRisk !== 'deferred' && currentItem.risk_level === 'yellow' && (
                       <p>
                         <span className="font-semibold text-warning">
                           警告：
@@ -272,7 +274,7 @@ export default function ItemDetailPage() {
                         在庫日数が目標在庫日数を下回っています。発注を検討してください。
                       </p>
                     )}
-                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'green' && (
+                    {effectiveDisplayRisk !== 'deferred' && currentItem.risk_level === 'green' && (
                       <p>
                         <span className="font-semibold text-success">
                           安全：
@@ -280,7 +282,7 @@ export default function ItemDetailPage() {
                         在庫は十分です。発注の必要はありません。
                       </p>
                     )}
-                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'surplus' && (
+                    {effectiveDisplayRisk !== 'deferred' && currentItem.risk_level === 'surplus' && (
                       <p>
                         <span className="font-semibold text-surplus">
                           余剰：
@@ -288,7 +290,7 @@ export default function ItemDetailPage() {
                         在庫日数が300日以上です。過剰在庫の可能性があります（販促・在庫圧縮等を検討）。
                       </p>
                     )}
-                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'dormant' && (
+                    {effectiveDisplayRisk !== 'deferred' && currentItem.risk_level === 'dormant' && (
                       <p>
                         <span className="font-semibold text-dormant">
                           休眠：
@@ -316,7 +318,7 @@ export default function ItemDetailPage() {
                 <div className="flex items-center gap-2">
                   {getRiskBadge(effectiveDisplayRisk)}
                   {effectiveDisplayRisk === 'deferred' && (
-                    <span className="text-xs text-muted-foreground">実リスク: {getDisplayRiskLabel(item.risk_level)}</span>
+                    <span className="text-xs text-muted-foreground">実リスク: {getDisplayRiskLabel(currentItem.risk_level)}</span>
                   )}
                 </div>
               </div>
