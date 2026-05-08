@@ -101,6 +101,61 @@ function readListingHandling_() {
   return out;
 }
 
+function readItemHandling_() {
+  // internal_id -> { handling_status, suppress_until, note }
+  // NOTE: item_handling は運用で増えるため、最新行優先（同じinternal_idが複数ある場合は後勝ち）
+  var values = [];
+  try {
+    values = readActiveSpreadsheetSheetValues('item_handling');
+  } catch (e) {
+    return {};
+  }
+  if (values.length < 2) return {};
+  var header = indexHeader(values[0]);
+  requireCols(header, ['internal_id', 'handling_status'], 'item_handling');
+
+  var out = {};
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var internal_id = toStringSafe(row[header['internal_id']]);
+    if (!internal_id) continue;
+    var st = toStringSafe(row[header['handling_status']]) || 'normal';
+    if (st !== 'normal' && st !== 'deferred') st = 'normal';
+    out[internal_id] = {
+      handling_status: st,
+      suppress_until: header['suppress_until'] !== undefined ? toStringSafe(row[header['suppress_until']]) : '',
+      note: header['note'] !== undefined ? toStringSafe(row[header['note']]) : '',
+    };
+  }
+  return out;
+}
+
+function parseDateOnlyUtcMs_(value) {
+  var s = toStringSafe(value);
+  if (!s) return null;
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  var d = new Date(s);
+  if (isNaN(d.getTime())) return null;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function todayDateOnlyUtcMsJst_() {
+  var now = new Date();
+  var jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate());
+}
+
+function isDeferredHandlingActive_(handling) {
+  if (!handling || handling.handling_status !== 'deferred') return false;
+  if (!handling.suppress_until) return true;
+  var untilMs = parseDateOnlyUtcMs_(handling.suppress_until);
+  if (untilMs === null) return true;
+  return untilMs >= todayDateOnlyUtcMsJst_();
+}
+
 function readBom_(itemsMap) {
   var values = readActiveSpreadsheetSheetValues('bom');
   if (values.length < 2) throw new Error('bom is empty');
@@ -348,6 +403,7 @@ function runEtlOnce() {
   var itemsMap = readItems_();
   var listingsMap = readListings_();
   var listingHandling = readListingHandling_();
+  var itemHandling = readItemHandling_();
   var bomByListing = readBom_(itemsMap);
   var yahooBomByListing = readYahooBom_(itemsMap);
   var yahooListingsMap = readYahooListings_();
@@ -555,6 +611,13 @@ function runEtlOnce() {
       risk = 'yellow';
     }
 
+    var handling = itemHandling[internal_id];
+    var handlingActive = isDeferredHandlingActive_(handling);
+    var displayRisk = risk;
+    if (handlingActive && (risk === 'red' || risk === 'yellow')) {
+      displayRisk = 'deferred';
+    }
+
     var need = cons * target + safety - stock;
     var reorder = ceilToLot(Math.max(need, 0), lot);
 
@@ -609,6 +672,11 @@ function runEtlOnce() {
       need_qty: need,
       reorder_qty_suggested: reorder,
       risk_level: risk,
+      display_risk_level: displayRisk,
+      handling_status: handling ? handling.handling_status : 'normal',
+      handling_note: handling && handling.note ? handling.note : undefined,
+      handling_until: handling && handling.suppress_until ? handling.suppress_until : undefined,
+      handling_active: handlingActive,
       default_unit_cost: item.default_unit_cost,
       listings: listings,
       // 詳細画面用：Yahoo商品別（先月/今月）

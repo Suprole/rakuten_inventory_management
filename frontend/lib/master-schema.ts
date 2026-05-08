@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const ListingHandlingStatusSchema = z.enum(['normal', 'unavailable']);
+export const ItemHandlingStatusSchema = z.enum(['normal', 'deferred']);
 
 export const ListingHandlingUpsertPayloadSchema = z.object({
   listing_id: z.string().min(1),
@@ -68,6 +69,45 @@ export const ListingHandlingBulkUpsertResponseSchema = z.object({
   updated: z.number().optional(),
   failed: z.number().optional(),
   results: z.array(ListingHandlingBulkUpsertResultSchema).optional(),
+  error: z.string().optional(),
+  message: z.string().optional(),
+});
+
+export const ItemHandlingUpsertPayloadSchema = z.object({
+  internal_id: z.string().min(1),
+  handling_status: ItemHandlingStatusSchema,
+  suppress_until: z.string().optional(),
+  note: z.string().optional(),
+});
+
+export const ItemHandlingUpsertResponseSchema = z.object({
+  ok: z.boolean(),
+  internal_id: z.string().optional(),
+  handling_status: ItemHandlingStatusSchema.optional(),
+  suppress_until: z.string().optional(),
+  note: z.string().optional(),
+  updated_at: z.string().optional(),
+  updated_by: z.string().optional(),
+  error: z.string().optional(),
+  message: z.string().optional(),
+});
+
+export type ItemHandlingUpsertPayload = z.infer<typeof ItemHandlingUpsertPayloadSchema>;
+
+export const ItemHandlingRecordSchema = z.object({
+  internal_id: z.string(),
+  handling_status: ItemHandlingStatusSchema,
+  suppress_until: z.string().optional(),
+  note: z.string().optional(),
+  updated_at: z.string().optional(),
+  updated_by: z.string().optional(),
+});
+
+export type ItemHandlingRecord = z.infer<typeof ItemHandlingRecordSchema>;
+
+export const ItemHandlingListResponseSchema = z.object({
+  ok: z.boolean(),
+  items: z.array(ItemHandlingRecordSchema).optional(),
   error: z.string().optional(),
   message: z.string().optional(),
 });

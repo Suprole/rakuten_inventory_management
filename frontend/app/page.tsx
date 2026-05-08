@@ -7,22 +7,32 @@ import { Button } from '@/components/ui/button';
 import { Package, ShoppingCart, AlertTriangle, TrendingUp, AlertCircle } from 'lucide-react';
 import { useItemMetrics, useMirrorMismatches, useUnmappedListings } from '@/lib/use-view';
 import { useSession } from 'next-auth/react';
+import { useItemHandlingRecords } from '@/lib/use-master';
+import { getEffectiveDisplayRisk } from '@/lib/item-risk';
 
 export default function HomePage() {
   const session = useSession();
   const canViewMonitorCards = (session.data?.user?.email || '').trim().toLowerCase() === 'info@suprole.com';
   const itemMetricsState = useItemMetrics();
+  const handlingState = useItemHandlingRecords();
   const mismatchState = useMirrorMismatches();
   const unmappedState = useUnmappedListings();
   const items = itemMetricsState.data ?? [];
+  const handlingRecords = handlingState.data ?? [];
   const mismatches = mismatchState.data ?? [];
   const unmapped = unmappedState.data ?? [];
+  const handlingByInternalId = new Map(handlingRecords.map((record) => [record.internal_id, record]));
+  const displayRiskItems = items.map((item) => ({
+    item,
+    displayRisk: getEffectiveDisplayRisk(item, handlingByInternalId.get(item.internal_id)),
+  }));
 
-  const redItems = items.filter((item) => item.risk_level === 'red');
-  const yellowItems = items.filter((item) => item.risk_level === 'yellow');
-  const greenItems = items.filter((item) => item.risk_level === 'green');
-  const surplusItems = items.filter((item) => item.risk_level === 'surplus');
-  const dormantItems = items.filter((item) => item.risk_level === 'dormant');
+  const redItems = displayRiskItems.filter(({ displayRisk }) => displayRisk === 'red');
+  const yellowItems = displayRiskItems.filter(({ displayRisk }) => displayRisk === 'yellow');
+  const greenItems = displayRiskItems.filter(({ displayRisk }) => displayRisk === 'green');
+  const surplusItems = displayRiskItems.filter(({ displayRisk }) => displayRisk === 'surplus');
+  const dormantItems = displayRiskItems.filter(({ displayRisk }) => displayRisk === 'dormant');
+  const deferredItems = displayRiskItems.filter(({ displayRisk }) => displayRisk === 'deferred');
   const reorderSuggested = items.filter((item) => item.reorder_qty_suggested > 0);
 
   return (
@@ -120,6 +130,23 @@ export default function HomePage() {
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 在庫0 / 消費0
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+                見送り
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-foreground">
+                {itemMetricsState.status === 'loading' ? '-' : deferredItems.length}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                危険・警告を一時抑制
               </p>
             </CardContent>
           </Card>

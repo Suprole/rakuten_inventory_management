@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const RiskLevelSchema = z.enum(['red', 'yellow', 'green', 'surplus', 'dormant']);
+export const DisplayRiskLevelSchema = z.enum(['red', 'yellow', 'green', 'surplus', 'dormant', 'deferred']);
 
 export const ListingMetricSchema = z.object({
   listing_id: z.string(),
@@ -51,6 +52,11 @@ export const ItemMetricSchema = z.object({
   need_qty: z.number(),
   reorder_qty_suggested: z.number(),
   risk_level: RiskLevelSchema,
+  display_risk_level: DisplayRiskLevelSchema.optional(),
+  handling_status: z.enum(['normal', 'deferred']).optional(),
+  handling_note: z.string().optional(),
+  handling_until: z.string().optional(),
+  handling_active: z.boolean().optional(),
   default_unit_cost: z.number().optional(),
   listings: z.array(ListingMetricSchema).optional(), // 任意（listing内訳を出す場合）
   yahoo_listings: z.array(YahooListingMetricSchema).optional(),
@@ -106,6 +112,8 @@ export const ListingSnapshotSchema = z.object({
 export const ListingSnapshotsSchema = z.array(ListingSnapshotSchema);
 
 export type ItemMetric = z.infer<typeof ItemMetricSchema>;
+export type RiskLevel = z.infer<typeof RiskLevelSchema>;
+export type DisplayRiskLevel = z.infer<typeof DisplayRiskLevelSchema>;
 export type MirrorMismatch = z.infer<typeof MirrorMismatchSchema>;
 export type UnmappedListing = z.infer<typeof UnmappedListingSchema>;
 export type YahooUnmappedListing = z.infer<typeof YahooUnmappedListingSchema>;

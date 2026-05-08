@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { Navigation } from '@/components/navigation';
 import {
   Card,
@@ -10,6 +11,8 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Table,
   TableBody,
@@ -33,15 +36,47 @@ import { cn } from '@/lib/utils';
 import { useParams } from 'next/navigation';
 import { useItemMetrics } from '@/lib/use-view';
 import { useCart } from '@/lib/use-cart';
+import { useItemHandlingRecords } from '@/lib/use-master';
+import { type DisplayRiskLevel } from '@/lib/view-schema';
+import { getDisplayRiskLabel, getDisplayRiskTextClass, getEffectiveDisplayRisk } from '@/lib/item-risk';
 
 export default function ItemDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const itemMetricsState = useItemMetrics();
+  const handlingState = useItemHandlingRecords();
   const cart = useCart();
   const items = itemMetricsState.data ?? [];
-  const item =
-    items.find((i) => i.internal_id === id);
+  const item = items.find((i) => i.internal_id === id);
+  const handlingRecords = useMemo(() => handlingState.data ?? [], [handlingState.data]);
+  const currentHandling = useMemo(() => {
+    if (!item) return undefined;
+    const record = handlingRecords.find((entry) => entry.internal_id === item.internal_id);
+    if (record) return record;
+    if (item.handling_status && item.handling_status !== 'normal') {
+      return {
+        internal_id: item.internal_id,
+        handling_status: item.handling_status,
+        suppress_until: item.handling_until,
+        note: item.handling_note,
+        updated_at: undefined,
+        updated_by: undefined,
+      };
+    }
+    return undefined;
+  }, [handlingRecords, item]);
+  const [handlingStatus, setHandlingStatus] = useState<'normal' | 'deferred'>('normal');
+  const [suppressUntil, setSuppressUntil] = useState('');
+  const [handlingNote, setHandlingNote] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setHandlingStatus(currentHandling?.handling_status === 'deferred' ? 'deferred' : 'normal');
+    setSuppressUntil(currentHandling?.suppress_until || '');
+    setHandlingNote(currentHandling?.note || '');
+  }, [currentHandling]);
 
   if (itemMetricsState.status === 'loading' && items.length === 0) {
     return (
@@ -78,14 +113,16 @@ export default function ItemDetailPage() {
   if (!item) {
     notFound();
   }
+  const effectiveDisplayRisk = getEffectiveDisplayRisk(item, currentHandling);
 
-  const getRiskBadge = (level: typeof item.risk_level) => {
+  const getRiskBadge = (level: DisplayRiskLevel) => {
     const variants = {
       red: 'bg-destructive text-destructive-foreground',
       yellow: 'bg-warning text-warning-foreground',
       green: 'bg-success text-success-foreground',
       surplus: 'bg-surplus text-surplus-foreground',
       dormant: 'bg-dormant text-dormant-foreground',
+      deferred: 'bg-muted text-muted-foreground',
     };
     const labels = {
       red: '危険',
@@ -93,6 +130,7 @@ export default function ItemDetailPage() {
       green: '安全',
       surplus: '余剰',
       dormant: '休眠',
+      deferred: '見送り',
     };
     return (
       <Badge className={cn('font-medium text-base', variants[level])}>
@@ -110,6 +148,43 @@ export default function ItemDetailPage() {
     }
     return (item.days_of_cover ?? 0).toFixed(1);
   };
+
+  async function saveHandling(nextStatus: 'normal' | 'deferred') {
+    setIsSaving(true);
+    setSaveMessage('');
+    setSaveError('');
+    try {
+      const res = await fetch('/api/master/item-handling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          internal_id: item.internal_id,
+          handling_status: nextStatus,
+          suppress_until: nextStatus === 'deferred' && suppressUntil ? suppressUntil : undefined,
+          note: handlingNote.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || (json && typeof json === 'object' && (json as { ok?: boolean }).ok === false)) {
+        const msg =
+          json && typeof json === 'object' && 'message' in json && typeof (json as { message?: unknown }).message === 'string'
+            ? (json as { message: string }).message
+            : '見送り設定の保存に失敗しました';
+        throw new Error(msg);
+      }
+      handlingState.refresh();
+      itemMetricsState.refresh();
+      setSaveMessage(
+        nextStatus === 'deferred'
+          ? '発注見送りを保存しました。一覧・ダッシュボードにも順次反映されます。'
+          : '発注見送りを解除しました。'
+      );
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -131,7 +206,7 @@ export default function ItemDetailPage() {
                 {item.internal_id}
               </p>
             </div>
-            {getRiskBadge(item.risk_level)}
+            {getRiskBadge(effectiveDisplayRisk)}
           </div>
         </div>
 
@@ -165,14 +240,7 @@ export default function ItemDetailPage() {
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <span className="text-sm text-muted-foreground">在庫日数</span>
                 <span
-                  className={cn(
-                    'text-xl font-semibold',
-                    item.risk_level === 'red' && 'text-destructive',
-                    item.risk_level === 'yellow' && 'text-warning',
-                    item.risk_level === 'green' && 'text-success',
-                    item.risk_level === 'surplus' && 'text-surplus',
-                    item.risk_level === 'dormant' && 'text-dormant'
-                  )}
+                  className={cn('text-xl font-semibold', getDisplayRiskTextClass(effectiveDisplayRisk))}
                 >
                   {formatDaysOfCover()}日
                 </span>
@@ -181,7 +249,14 @@ export default function ItemDetailPage() {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div className="text-sm text-muted-foreground">
-                    {item.risk_level === 'red' && (
+                    {effectiveDisplayRisk === 'deferred' && (
+                      <p>
+                        <span className="font-semibold text-foreground">見送り:</span>
+                        {` 実リスクは${getDisplayRiskLabel(item.risk_level)}です。発注対象から一時的に外しています。`}
+                        {currentHandling?.suppress_until ? ` 期限: ${currentHandling.suppress_until}` : ''}
+                      </p>
+                    )}
+                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'red' && (
                       <p>
                         <span className="font-semibold text-destructive">
                           危険：
@@ -189,7 +264,7 @@ export default function ItemDetailPage() {
                         在庫日数がリードタイムを下回っています。至急発注してください。
                       </p>
                     )}
-                    {item.risk_level === 'yellow' && (
+                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'yellow' && (
                       <p>
                         <span className="font-semibold text-warning">
                           警告：
@@ -197,7 +272,7 @@ export default function ItemDetailPage() {
                         在庫日数が目標在庫日数を下回っています。発注を検討してください。
                       </p>
                     )}
-                    {item.risk_level === 'green' && (
+                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'green' && (
                       <p>
                         <span className="font-semibold text-success">
                           安全：
@@ -205,7 +280,7 @@ export default function ItemDetailPage() {
                         在庫は十分です。発注の必要はありません。
                       </p>
                     )}
-                    {item.risk_level === 'surplus' && (
+                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'surplus' && (
                       <p>
                         <span className="font-semibold text-surplus">
                           余剰：
@@ -213,7 +288,7 @@ export default function ItemDetailPage() {
                         在庫日数が300日以上です。過剰在庫の可能性があります（販促・在庫圧縮等を検討）。
                       </p>
                     )}
-                    {item.risk_level === 'dormant' && (
+                    {effectiveDisplayRisk !== 'deferred' && item.risk_level === 'dormant' && (
                       <p>
                         <span className="font-semibold text-dormant">
                           休眠：
@@ -224,6 +299,95 @@ export default function ItemDetailPage() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                発注見送り
+              </CardTitle>
+              <CardDescription>危険・警告の表示を一時的に見送りへ切り替えます</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <span className="text-sm text-muted-foreground">現在の表示</span>
+                <div className="flex items-center gap-2">
+                  {getRiskBadge(effectiveDisplayRisk)}
+                  {effectiveDisplayRisk === 'deferred' && (
+                    <span className="text-xs text-muted-foreground">実リスク: {getDisplayRiskLabel(item.risk_level)}</span>
+                  )}
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Button
+                  variant={handlingStatus === 'deferred' ? 'default' : 'outline'}
+                  className={cn('w-full', handlingStatus === 'deferred' && 'bg-primary text-primary-foreground')}
+                  onClick={() => setHandlingStatus('deferred')}
+                  disabled={isSaving}
+                >
+                  見送りにする
+                </Button>
+                <Button
+                  variant={handlingStatus === 'normal' ? 'default' : 'outline'}
+                  className="w-full"
+                  onClick={() => setHandlingStatus('normal')}
+                  disabled={isSaving}
+                >
+                  見送り解除
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="handling-until" className="text-sm font-medium text-foreground">
+                  見送り期限
+                </label>
+                <Input
+                  id="handling-until"
+                  type="date"
+                  value={suppressUntil}
+                  onChange={(e) => setSuppressUntil(e.target.value)}
+                  disabled={isSaving || handlingStatus !== 'deferred'}
+                />
+                <p className="text-xs text-muted-foreground">未入力なら解除まで見送り扱いを継続します。</p>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="handling-note" className="text-sm font-medium text-foreground">
+                  理由メモ
+                </label>
+                <Textarea
+                  id="handling-note"
+                  value={handlingNote}
+                  onChange={(e) => setHandlingNote(e.target.value)}
+                  placeholder="例: 季節商品のため今月は補充しない"
+                  className="min-h-24"
+                  disabled={isSaving}
+                />
+              </div>
+              {currentHandling?.updated_at && (
+                <div className="text-xs text-muted-foreground">
+                  最終更新: {currentHandling.updated_at}
+                  {currentHandling.updated_by ? ` / ${currentHandling.updated_by}` : ''}
+                </div>
+              )}
+              {saveMessage && (
+                <div className="rounded-md border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
+                  {saveMessage}
+                </div>
+              )}
+              {saveError && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {saveError}
+                </div>
+              )}
+              {handlingState.status === 'error' && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  見送り設定の読込に失敗しました: {handlingState.error}
+                </div>
+              )}
+              <Button className="w-full" onClick={() => saveHandling(handlingStatus)} disabled={isSaving}>
+                {isSaving ? '保存中...' : '見送り設定を保存'}
+              </Button>
             </CardContent>
           </Card>
 

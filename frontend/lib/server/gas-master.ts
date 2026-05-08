@@ -1,4 +1,7 @@
 import {
+  ItemHandlingListResponseSchema,
+  ItemHandlingUpsertPayloadSchema,
+  ItemHandlingUpsertResponseSchema,
   ListingHandlingBulkUpsertPayloadSchema,
   ListingHandlingBulkUpsertResponseSchema,
   ListingHandlingListResponseSchema,
@@ -124,6 +127,54 @@ export async function bulkUpsertListingHandling(params: {
 
   const parsed = ListingHandlingBulkUpsertResponseSchema.safeParse(json);
   if (!parsed.success) throw new Error(`GAS listing_handling/bulk_upsert の形式が不正です: ${parsed.error.message}`);
+  return parsed.data;
+}
+
+export async function upsertItemHandling(params: {
+  payload: unknown;
+  updatedBy?: string;
+  requestId?: string;
+}): Promise<unknown> {
+  const input = ItemHandlingUpsertPayloadSchema.safeParse(params.payload);
+  if (!input.success) throw new Error(`item_handling/upsert の入力が不正です: ${input.error.message}`);
+
+  const body = {
+    ...input.data,
+    suppress_until: (input.data.suppress_until || '').trim() || undefined,
+    note: (input.data.note || '').trim() || undefined,
+    updated_by: (params.updatedBy || '').trim(),
+  };
+
+  const json = await gasFetch<unknown>({
+    path: '/master/item_handling/upsert',
+    method: 'POST',
+    body,
+    requestId: params.requestId,
+  });
+
+  const parsed = ItemHandlingUpsertResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error(`GAS item_handling/upsert の形式が不正です: ${parsed.error.message}`);
+  return parsed.data;
+}
+
+export async function listItemHandling(params: {
+  handlingStatus?: 'normal' | 'deferred';
+  internalId?: string;
+  requestId?: string;
+}): Promise<unknown> {
+  const query: Record<string, string> = {};
+  if (params.handlingStatus) query.handling_status = params.handlingStatus;
+  if (params.internalId) query.internal_id = params.internalId;
+
+  const json = await gasFetch<unknown>({
+    path: '/master/item_handling/list',
+    method: 'GET',
+    query: Object.keys(query).length > 0 ? query : undefined,
+    requestId: params.requestId,
+  });
+
+  const parsed = ItemHandlingListResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error(`GAS item_handling/list の形式が不正です: ${parsed.error.message}`);
   return parsed.data;
 }
 

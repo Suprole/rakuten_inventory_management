@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Search, ArrowUpDown, Package, ShoppingCart, Plus, Download } from 'lucide-react';
-import { type ItemMetric } from '@/lib/view-schema';
+import { type DisplayRiskLevel, type ItemMetric } from '@/lib/view-schema';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -25,6 +25,14 @@ import { useItemMetrics } from '@/lib/use-view';
 import { useDebouncedValue } from '@/lib/use-debounced';
 import { useCart } from '@/lib/use-cart';
 import { usePoLastSentByItem } from '@/lib/use-po';
+import { useItemHandlingRecords } from '@/lib/use-master';
+import {
+  DISPLAY_RISK_LABELS,
+  DISPLAY_RISK_VARIANTS,
+  getDisplayRiskLabel,
+  getDisplayRiskTextClass,
+  getEffectiveDisplayRisk,
+} from '@/lib/item-risk';
 
 type SortField =
   | 'internal_id'
@@ -36,7 +44,7 @@ type SortField =
   | 'days_of_cover'
   | 'reorder_qty_suggested';
 type SortDirection = 'asc' | 'desc';
-type RiskFilter = 'all' | ItemMetric['risk_level'];
+type RiskFilter = 'all' | DisplayRiskLevel;
 type LastSentInfo = { last_sent_at: string; last_po_id: string };
 
 const SORT_FIELDS: SortField[] = [
@@ -50,22 +58,6 @@ const SORT_FIELDS: SortField[] = [
   'reorder_qty_suggested',
 ];
 
-const RISK_VARIANTS: Record<ItemMetric['risk_level'], string> = {
-  red: 'bg-destructive text-destructive-foreground',
-  yellow: 'bg-warning text-warning-foreground',
-  green: 'bg-success text-success-foreground',
-  surplus: 'bg-surplus text-surplus-foreground',
-  dormant: 'bg-dormant text-dormant-foreground',
-};
-
-const RISK_LABELS: Record<ItemMetric['risk_level'], string> = {
-  red: '危険',
-  yellow: '警告',
-  green: '安全',
-  surplus: '余剰',
-  dormant: '休眠',
-};
-
 const RISK_FILTER_OPTIONS: Array<{ value: RiskFilter; label: string }> = [
   { value: 'all', label: 'すべて' },
   { value: 'red', label: '危険' },
@@ -73,6 +65,7 @@ const RISK_FILTER_OPTIONS: Array<{ value: RiskFilter; label: string }> = [
   { value: 'green', label: '安全' },
   { value: 'surplus', label: '余剰' },
   { value: 'dormant', label: '休眠' },
+  { value: 'deferred', label: '見送り' },
 ];
 
 function parseSortField(v: string | null): SortField {
@@ -83,7 +76,7 @@ function parseSortDirection(v: string | null): SortDirection {
 }
 
 function parseRiskFilter(v: string | null): RiskFilter {
-  return v === 'red' || v === 'yellow' || v === 'green' || v === 'surplus' || v === 'dormant' ? v : 'all';
+  return v === 'red' || v === 'yellow' || v === 'green' || v === 'surplus' || v === 'dormant' || v === 'deferred' ? v : 'all';
 }
 
 function matchesItemQuery(item: ItemMetric, q: string): boolean {
@@ -118,12 +111,12 @@ function formatYen(value: number): string {
   return `¥${Math.round(value || 0).toLocaleString()}`;
 }
 
-function getRiskBadge(level: ItemMetric['risk_level']) {
-  return <Badge className={cn('font-medium', RISK_VARIANTS[level])}>{RISK_LABELS[level]}</Badge>;
+function getRiskBadge(level: DisplayRiskLevel) {
+  return <Badge className={cn('font-medium', DISPLAY_RISK_VARIANTS[level])}>{DISPLAY_RISK_LABELS[level]}</Badge>;
 }
 
-function getRiskLabel(level: ItemMetric['risk_level']) {
-  return RISK_LABELS[level];
+function getRiskLabel(level: DisplayRiskLevel) {
+  return getDisplayRiskLabel(level);
 }
 
 function formatDaysOfCover(item: ItemMetric) {
@@ -181,6 +174,7 @@ const SalesInline = memo(function SalesInline({
 
 const ItemTableRow = memo(function ItemTableRow({
   item,
+  displayRisk,
   lastSent,
   inCart,
   onOpenItem,
@@ -188,6 +182,7 @@ const ItemTableRow = memo(function ItemTableRow({
   onAddToCart,
 }: {
   item: ItemMetric;
+  displayRisk: DisplayRiskLevel;
   lastSent?: LastSentInfo;
   inCart: boolean;
   onOpenItem: (internalId: string) => void;
@@ -209,7 +204,7 @@ const ItemTableRow = memo(function ItemTableRow({
         }
       }}
     >
-      <TableCell>{getRiskBadge(item.risk_level)}</TableCell>
+      <TableCell>{getRiskBadge(displayRisk)}</TableCell>
       <TableCell className="font-mono text-sm">{item.internal_id}</TableCell>
       <TableCell className="whitespace-nowrap text-xs">
         {!lastSent || !lastSent.last_sent_at ? (
@@ -240,15 +235,7 @@ const ItemTableRow = memo(function ItemTableRow({
         />
       </TableCell>
       <TableCell className="text-right font-mono">
-        <span
-          className={cn(
-            item.risk_level === 'red' && 'text-destructive',
-            item.risk_level === 'yellow' && 'text-warning',
-            item.risk_level === 'green' && 'text-success',
-            item.risk_level === 'surplus' && 'text-surplus',
-            item.risk_level === 'dormant' && 'text-dormant'
-          )}
-        >
+        <span className={getDisplayRiskTextClass(displayRisk)}>
           {formatDaysOfCover(item)}日
         </span>
       </TableCell>
@@ -305,6 +292,8 @@ export default function ItemsPage() {
 
   const itemMetricsState = useItemMetrics();
   const itemMetrics = useMemo(() => itemMetricsState.data ?? [], [itemMetricsState.data]);
+  const itemHandlingState = useItemHandlingRecords();
+  const itemHandlingRecords = useMemo(() => itemHandlingState.data ?? [], [itemHandlingState.data]);
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
   const debouncedInternalIdsRaw = useDebouncedValue(internalIdsRaw, 300);
   const debouncedRiskFilter = useDebouncedValue(riskFilter, 180);
@@ -319,6 +308,21 @@ export default function ItemsPage() {
     }
     return m;
   }, [lastSentItems]);
+  const handlingByInternalId = useMemo(() => {
+    const m = new Map<string, (typeof itemHandlingRecords)[number]>();
+    for (const it of itemHandlingRecords) {
+      if (!it.internal_id) continue;
+      m.set(it.internal_id, it);
+    }
+    return m;
+  }, [itemHandlingRecords]);
+  const displayRiskByInternalId = useMemo(() => {
+    const m = new Map<string, DisplayRiskLevel>();
+    for (const item of itemMetrics) {
+      m.set(item.internal_id, getEffectiveDisplayRisk(item, handlingByInternalId.get(item.internal_id)));
+    }
+    return m;
+  }, [itemMetrics, handlingByInternalId]);
   const lines = cart.lines;
   const isInCart = useMemo(() => {
     const set = new Set(lines.map((l) => l.internal_id));
@@ -375,7 +379,7 @@ export default function ItemsPage() {
 
     // リスクレベルフィルタ
     if (riskFilter !== 'all') {
-      items = items.filter((item) => item.risk_level === riskFilter);
+      items = items.filter((item) => (displayRiskByInternalId.get(item.internal_id) ?? item.display_risk_level) === riskFilter);
     }
 
     // ソート
@@ -431,7 +435,7 @@ export default function ItemsPage() {
     });
 
     return items;
-  }, [itemMetrics, internalIdsRaw, searchQuery, riskFilter, sortField, sortDirection]);
+  }, [itemMetrics, internalIdsRaw, searchQuery, riskFilter, sortField, sortDirection, displayRiskByInternalId]);
 
   const totals = useMemo(() => {
     return filteredAndSortedItems.reduce(
@@ -512,6 +516,7 @@ export default function ItemsPage() {
         <ItemTableRow
           key={item.internal_id}
           item={item}
+          displayRisk={displayRiskByInternalId.get(item.internal_id) ?? item.risk_level}
           lastSent={lastSentByInternalId.get(item.internal_id)}
           inCart={isInCart(item.internal_id)}
           onOpenItem={openItemDetail}
@@ -519,13 +524,14 @@ export default function ItemsPage() {
           onAddToCart={addToCart}
         />
       )),
-    [filteredAndSortedItems, lastSentByInternalId, isInCart, openItemDetail, openCart, addToCart]
+    [filteredAndSortedItems, displayRiskByInternalId, lastSentByInternalId, isInCart, openItemDetail, openCart, addToCart]
   );
 
   const downloadCsv = () => {
     const rows: string[][] = [];
     rows.push([
-      'リスク',
+      '表示ステータス',
+      '実リスク',
       '社内ID',
       '商品名',
       '在庫数',
@@ -540,8 +546,10 @@ export default function ItemsPage() {
     ]);
 
     for (const item of filteredAndSortedItems) {
+      const displayRisk = displayRiskByInternalId.get(item.internal_id) ?? item.risk_level;
       rows.push([
-        getRiskLabel(item.risk_level),
+        getRiskLabel(displayRisk),
+        getDisplayRiskLabel(item.risk_level),
         item.internal_id,
         item.name,
         String(item.derived_stock ?? 0),
@@ -671,7 +679,8 @@ export default function ItemsPage() {
                           active && option.value === 'yellow' && 'bg-warning hover:bg-warning/90',
                           active && option.value === 'green' && 'bg-success hover:bg-success/90',
                           active && option.value === 'surplus' && 'bg-surplus hover:bg-surplus/90',
-                          active && option.value === 'dormant' && 'bg-dormant hover:bg-dormant/90'
+                          active && option.value === 'dormant' && 'bg-dormant hover:bg-dormant/90',
+                          active && option.value === 'deferred' && 'bg-muted text-foreground hover:bg-muted/90'
                         )}
                         onClick={() => setRiskFilter(option.value)}
                       >

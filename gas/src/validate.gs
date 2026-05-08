@@ -11,6 +11,7 @@ function validateSheetsSchema() {
     { name: 'items', required: ['internal_id', 'name', 'active'] },
     { name: 'listings', required: ['listing_id', 'store_id', 'rakuten_item_no', 'rakuten_sku', 'active'] },
     { name: 'listing_handling', required: ['listing_id', 'handling_status'] },
+    { name: 'item_handling', required: ['internal_id', 'handling_status'] },
     { name: 'bom', required: ['listing_id', 'internal_id', 'qty'] },
     // Yahoo（CSVインポート）系
     { name: 'yahoo_listings', required: ['yahoo_listing_id', 'item_code', 'sub_code', 'active'] },

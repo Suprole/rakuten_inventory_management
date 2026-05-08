@@ -43,6 +43,15 @@ function setupMasterSpreadsheet() {
     'updated_at',
     'updated_by',
   ]);
+  // 社内商品単位の「発注見送り」管理
+  createOrResetHeader_(ss, 'item_handling', [
+    'internal_id',
+    'handling_status', // normal / deferred
+    'suppress_until',
+    'note',
+    'updated_at',
+    'updated_by',
+  ]);
   createOrResetHeader_(ss, 'bom', ['listing_id', 'internal_id', 'qty']);
 
   // Yahoo（CSVインポート）系

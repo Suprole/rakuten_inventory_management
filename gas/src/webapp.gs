@@ -74,6 +74,16 @@ function handleApi(method, e) {
       var st = e && e.parameter ? e.parameter.handling_status || e.parameter.status : '';
       return jsonResponse(200, listListingHandling_({ handling_status: st }));
     }
+    if (method === 'POST' && path === '/master/item_handling/upsert') {
+      var body6 = {};
+      if (e && e.postData && e.postData.contents) body6 = JSON.parse(e.postData.contents);
+      return jsonResponse(200, upsertItemHandling_(body6));
+    }
+    if (method === 'GET' && path === '/master/item_handling/list') {
+      var st2 = e && e.parameter ? e.parameter.handling_status || e.parameter.status : '';
+      var internalId = e && e.parameter ? e.parameter.internal_id : '';
+      return jsonResponse(200, listItemHandling_({ handling_status: st2, internal_id: internalId }));
+    }
 
     return jsonResponse(404, { ok: false, error: 'not_found', path: path, method: method });
   } catch (err) {
