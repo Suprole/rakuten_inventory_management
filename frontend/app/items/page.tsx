@@ -54,7 +54,7 @@ type SortField =
   | 'days_of_cover'
   | 'reorder_qty_suggested';
 type SortDirection = 'asc' | 'desc';
-type RiskFilter = 'all' | DisplayRiskLevel;
+type RiskFilter = DisplayRiskLevel;
 type LastSentInfo = { last_sent_at: string; last_po_id: string };
 
 const SORT_FIELDS: SortField[] = [
@@ -69,7 +69,6 @@ const SORT_FIELDS: SortField[] = [
 ];
 
 const RISK_FILTER_OPTIONS: Array<{ value: RiskFilter; label: string }> = [
-  { value: 'all', label: 'すべて' },
   { value: 'red', label: '危険' },
   { value: 'yellow', label: '警告' },
   { value: 'green', label: '安全' },
@@ -85,8 +84,33 @@ function parseSortDirection(v: string | null): SortDirection {
   return v === 'desc' ? 'desc' : 'asc';
 }
 
-function parseRiskFilter(v: string | null): RiskFilter {
-  return v === 'red' || v === 'yellow' || v === 'green' || v === 'surplus' || v === 'dormant' || v === 'deferred' ? v : 'all';
+function isRiskFilter(v: string): v is RiskFilter {
+  return v === 'red' || v === 'yellow' || v === 'green' || v === 'surplus' || v === 'dormant' || v === 'deferred';
+}
+
+function normalizeRiskFilters(values: Iterable<string>): RiskFilter[] {
+  const valueSet = new Set<string>(values);
+  return RISK_FILTER_OPTIONS.map((option) => option.value).filter((value) => valueSet.has(value));
+}
+
+function parseRiskFilters(v: string | null): RiskFilter[] {
+  if (!v) return [];
+  return normalizeRiskFilters(
+    v
+      .split(',')
+      .map((value) => value.trim())
+      .filter(isRiskFilter)
+  );
+}
+
+function toggleRiskFilter(filters: RiskFilter[], next: RiskFilter): RiskFilter[] {
+  return filters.includes(next)
+    ? filters.filter((value) => value !== next)
+    : normalizeRiskFilters([...filters, next]);
+}
+
+function areRiskFiltersEqual(a: RiskFilter[], b: RiskFilter[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 function matchesItemQuery(item: ItemMetric, q: string): boolean {
@@ -322,7 +346,7 @@ export default function ItemsPage() {
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams?.get('query') || '');
   const [internalIdsRaw, setInternalIdsRaw] = useState(searchParams?.get('ids') || '');
-  const [riskFilter, setRiskFilter] = useState<RiskFilter>(parseRiskFilter(searchParams?.get('risk') || null));
+  const [riskFilters, setRiskFilters] = useState<RiskFilter[]>(parseRiskFilters(searchParams?.get('risk') || null));
   const [sortField, setSortField] = useState<SortField>(parseSortField(searchParams?.get('sort') || null));
   const [sortDirection, setSortDirection] = useState<SortDirection>(parseSortDirection(searchParams?.get('dir') || null));
 
@@ -332,7 +356,7 @@ export default function ItemsPage() {
   const itemHandlingRecords = useMemo(() => itemHandlingState.data ?? [], [itemHandlingState.data]);
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
   const debouncedInternalIdsRaw = useDebouncedValue(internalIdsRaw, 300);
-  const debouncedRiskFilter = useDebouncedValue(riskFilter, 180);
+  const debouncedRiskFilters = useDebouncedValue(riskFilters, 180);
   const cart = useCart();
   const lastSentState = usePoLastSentByItem();
   const lastSentItems = useMemo(() => lastSentState.data ?? [], [lastSentState.data]);
@@ -382,25 +406,25 @@ export default function ItemsPage() {
     const ids = debouncedInternalIdsRaw.trim();
     if (q) params.set('query', q);
     if (ids) params.set('ids', ids);
-    if (debouncedRiskFilter !== 'all') params.set('risk', debouncedRiskFilter);
+    if (debouncedRiskFilters.length > 0) params.set('risk', debouncedRiskFilters.join(','));
     if (sortField !== 'days_of_cover') params.set('sort', sortField);
     if (sortDirection !== 'asc') params.set('dir', sortDirection);
 
     const qs = params.toString();
     const url = qs ? `/items?${qs}` : '/items';
     router.replace(url, { scroll: false });
-  }, [debouncedQuery, debouncedInternalIdsRaw, debouncedRiskFilter, sortField, sortDirection, router]);
+  }, [debouncedQuery, debouncedInternalIdsRaw, debouncedRiskFilters, sortField, sortDirection, router]);
 
   // 戻る/進む等でURLが変わったとき、入力状態に追従
   useEffect(() => {
     const q = searchParams?.get('query') || '';
     const ids = searchParams?.get('ids') || '';
-    const r = parseRiskFilter(searchParams?.get('risk') || null);
+    const r = parseRiskFilters(searchParams?.get('risk') || null);
     const sf = parseSortField(searchParams?.get('sort') || null);
     const sd = parseSortDirection(searchParams?.get('dir') || null);
     if (q !== searchQuery) setSearchQuery(q);
     if (ids !== internalIdsRaw) setInternalIdsRaw(ids);
-    if (r !== riskFilter) setRiskFilter(r);
+    if (!areRiskFiltersEqual(r, riskFilters)) setRiskFilters(r);
     if (sf !== sortField) setSortField(sf);
     if (sd !== sortDirection) setSortDirection(sd);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -424,8 +448,9 @@ export default function ItemsPage() {
     }
 
     // リスクレベルフィルタ
-    if (riskFilter !== 'all') {
-      items = items.filter((item) => (displayRiskByInternalId.get(item.internal_id) ?? item.display_risk_level) === riskFilter);
+    if (riskFilters.length > 0) {
+      const selectedRisks = new Set(riskFilters);
+      items = items.filter((item) => selectedRisks.has(displayRiskByInternalId.get(item.internal_id) ?? item.risk_level));
     }
 
     // ソート
@@ -481,7 +506,7 @@ export default function ItemsPage() {
     });
 
     return items;
-  }, [itemMetrics, internalIdsRaw, searchQuery, riskFilter, sortField, sortDirection, displayRiskByInternalId]);
+  }, [itemMetrics, internalIdsRaw, searchQuery, riskFilters, sortField, sortDirection, displayRiskByInternalId]);
 
   const totals = useMemo(() => {
     return filteredAndSortedItems.reduce(
@@ -867,10 +892,22 @@ export default function ItemsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <div className="text-sm font-medium text-foreground">リスクレベル</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-foreground">リスクレベル</div>
+                  <div className="text-xs text-muted-foreground">複数選択可</div>
+                </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={riskFilters.length === 0 ? 'default' : 'outline'}
+                    className="bg-transparent"
+                    onClick={() => setRiskFilters([])}
+                  >
+                    すべて
+                  </Button>
                   {RISK_FILTER_OPTIONS.map((option) => {
-                    const active = riskFilter === option.value;
+                    const active = riskFilters.includes(option.value);
                     return (
                       <Button
                         key={option.value}
@@ -879,7 +916,7 @@ export default function ItemsPage() {
                         variant={active ? 'default' : 'outline'}
                         className={cn(
                           'bg-transparent',
-                          active && option.value !== 'all' && 'border-transparent text-primary-foreground',
+                          active && 'border-transparent text-primary-foreground',
                           active && option.value === 'red' && 'bg-destructive hover:bg-destructive/90',
                           active && option.value === 'yellow' && 'bg-warning hover:bg-warning/90',
                           active && option.value === 'green' && 'bg-success hover:bg-success/90',
@@ -887,7 +924,7 @@ export default function ItemsPage() {
                           active && option.value === 'dormant' && 'bg-dormant hover:bg-dormant/90',
                           active && option.value === 'deferred' && 'bg-muted text-foreground hover:bg-muted/90'
                         )}
-                        onClick={() => setRiskFilter(option.value)}
+                        onClick={() => setRiskFilters((current) => toggleRiskFilter(current, option.value))}
                       >
                         {option.label}
                       </Button>
