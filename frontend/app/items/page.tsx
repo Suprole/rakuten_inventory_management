@@ -455,6 +455,16 @@ export default function ItemsPage() {
 
     // ソート
     items = [...items].sort((a, b) => {
+      if (riskFilters.length === 0) {
+        const aDisplayRisk = displayRiskByInternalId.get(a.internal_id) ?? a.risk_level;
+        const bDisplayRisk = displayRiskByInternalId.get(b.internal_id) ?? b.risk_level;
+        const aDeferredRank = aDisplayRisk === 'deferred' ? 1 : 0;
+        const bDeferredRank = bDisplayRisk === 'deferred' ? 1 : 0;
+        if (aDeferredRank !== bDeferredRank) {
+          return aDeferredRank - bDeferredRank;
+        }
+      }
+
       const getSortValue = (item: ItemMetric): number | string => {
         switch (sortField) {
           case 'internal_id':
