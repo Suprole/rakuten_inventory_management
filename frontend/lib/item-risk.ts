@@ -18,7 +18,7 @@ export const DISPLAY_RISK_LABELS: Record<DisplayRiskLevel, string> = {
   green: '安全',
   surplus: '余剰',
   dormant: '休眠',
-  deferred: '見送り',
+  deferred: '非表示',
 };
 
 export function getDisplayRiskLabel(level: DisplayRiskLevel): string {

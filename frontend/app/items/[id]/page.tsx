@@ -131,7 +131,7 @@ export default function ItemDetailPage() {
       green: '安全',
       surplus: '余剰',
       dormant: '休眠',
-      deferred: '見送り',
+      deferred: '非表示',
     };
     return (
       <Badge className={cn('font-medium text-base', variants[level])}>
@@ -171,15 +171,15 @@ export default function ItemDetailPage() {
         const msg =
           json && typeof json === 'object' && 'message' in json && typeof (json as { message?: unknown }).message === 'string'
             ? (json as { message: string }).message
-            : '見送り設定の保存に失敗しました';
+            : '非表示設定の保存に失敗しました';
         throw new Error(msg);
       }
       handlingState.refresh();
       itemMetricsState.refresh();
       setSaveMessage(
         nextStatus === 'deferred'
-          ? '発注見送りを保存しました。一覧・ダッシュボードにも順次反映されます。'
-          : '発注見送りを解除しました。'
+          ? '非表示設定を保存しました。一覧・ダッシュボードにも順次反映されます。'
+          : '非表示設定を解除しました。'
       );
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
@@ -253,7 +253,7 @@ export default function ItemDetailPage() {
                   <div className="text-sm text-muted-foreground">
                     {effectiveDisplayRisk === 'deferred' && (
                       <p>
-                        <span className="font-semibold text-foreground">見送り:</span>
+                        <span className="font-semibold text-foreground">非表示:</span>
                         {` 実リスクは${getDisplayRiskLabel(currentItem.risk_level)}です。発注対象から一時的に外しています。`}
                         {currentHandling?.suppress_until ? ` 期限: ${currentHandling.suppress_until}` : ''}
                       </p>
@@ -308,9 +308,9 @@ export default function ItemDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5" />
-                発注見送り
+                非表示設定
               </CardTitle>
-              <CardDescription>危険・警告の表示を一時的に見送りへ切り替えます</CardDescription>
+              <CardDescription>危険・警告の表示を一時的に非表示へ切り替えます</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
@@ -329,7 +329,7 @@ export default function ItemDetailPage() {
                   onClick={() => setHandlingStatus('deferred')}
                   disabled={isSaving}
                 >
-                  見送りにする
+                  非表示にする
                 </Button>
                 <Button
                   variant={handlingStatus === 'normal' ? 'default' : 'outline'}
@@ -337,12 +337,12 @@ export default function ItemDetailPage() {
                   onClick={() => setHandlingStatus('normal')}
                   disabled={isSaving}
                 >
-                  見送り解除
+                  非表示解除
                 </Button>
               </div>
               <div className="space-y-2">
                 <label htmlFor="handling-until" className="text-sm font-medium text-foreground">
-                  見送り期限
+                  非表示期限
                 </label>
                 <Input
                   id="handling-until"
@@ -351,7 +351,7 @@ export default function ItemDetailPage() {
                   onChange={(e) => setSuppressUntil(e.target.value)}
                   disabled={isSaving || handlingStatus !== 'deferred'}
                 />
-                <p className="text-xs text-muted-foreground">未入力なら解除まで見送り扱いを継続します。</p>
+                <p className="text-xs text-muted-foreground">未入力なら解除まで非表示扱いを継続します。</p>
               </div>
               <div className="space-y-2">
                 <label htmlFor="handling-note" className="text-sm font-medium text-foreground">
@@ -384,11 +384,11 @@ export default function ItemDetailPage() {
               )}
               {handlingState.status === 'error' && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                  見送り設定の読込に失敗しました: {handlingState.error}
+                  非表示設定の読込に失敗しました: {handlingState.error}
                 </div>
               )}
               <Button className="w-full" onClick={() => saveHandling(handlingStatus)} disabled={isSaving}>
-                {isSaving ? '保存中...' : '見送り設定を保存'}
+                {isSaving ? '保存中...' : '非表示設定を保存'}
               </Button>
             </CardContent>
           </Card>

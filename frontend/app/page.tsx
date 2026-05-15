@@ -138,7 +138,7 @@ export default function HomePage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <div className="h-2 w-2 rounded-full bg-muted-foreground" />
-                見送り
+                非表示
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -146,7 +146,7 @@ export default function HomePage() {
                 {itemMetricsState.status === 'loading' ? '-' : deferredItems.length}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                危険・警告を一時抑制
+                危険・警告を一時的に非表示
               </p>
             </CardContent>
           </Card>

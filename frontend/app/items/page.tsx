@@ -74,7 +74,7 @@ const RISK_FILTER_OPTIONS: Array<{ value: RiskFilter; label: string }> = [
   { value: 'green', label: '安全' },
   { value: 'surplus', label: '余剰' },
   { value: 'dormant', label: '休眠' },
-  { value: 'deferred', label: '見送り' },
+  { value: 'deferred', label: '非表示' },
 ];
 
 function parseSortField(v: string | null): SortField {
@@ -324,8 +324,8 @@ const ItemTableRow = memo(function ItemTableRow({
             disabled={!canOpenDefer}
             title={
               canOpenDefer
-                ? '発注見送りを設定'
-                : '見送り設定は危険・警告、または見送り設定済みの商品で利用できます'
+                ? '非表示設定を変更'
+                : '非表示設定は危険・警告、または非表示設定済みの商品で利用できます'
             }
             onClick={(e) => {
               e.preventDefault();
@@ -333,7 +333,7 @@ const ItemTableRow = memo(function ItemTableRow({
               onOpenDefer(item);
             }}
           >
-            {hasDeferredHandling ? '見送り設定' : '見送り'}
+            {hasDeferredHandling ? '非表示設定' : '非表示'}
           </Button>
         </div>
       </TableCell>
@@ -614,7 +614,7 @@ export default function ItemsPage() {
       });
       const json = (await res.json()) as { ok?: boolean; message?: string };
       if (!res.ok || json.ok === false) {
-        throw new Error(json.message || '見送り設定の保存に失敗しました');
+        throw new Error(json.message || '非表示設定の保存に失敗しました');
       }
       itemHandlingState.refresh();
       itemMetricsState.refresh();
@@ -727,9 +727,9 @@ export default function ItemsPage() {
           <Dialog open={handlingDialogItemId !== null} onOpenChange={closeHandlingDialog}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>発注見送り設定</DialogTitle>
+                <DialogTitle>非表示設定</DialogTitle>
                 <DialogDescription>
-                  一覧から直接、危険・警告商品の見送り設定を保存します。
+                  一覧から直接、危険・警告商品の非表示設定を保存します。
                 </DialogDescription>
               </DialogHeader>
               {handlingDialogItem && (
@@ -757,7 +757,7 @@ export default function ItemsPage() {
                         onClick={() => setHandlingStatusDraft('deferred')}
                         disabled={isHandlingSaving}
                       >
-                        見送りにする
+                        非表示にする
                       </Button>
                       <Button
                         type="button"
@@ -772,7 +772,7 @@ export default function ItemsPage() {
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="handling-until">見送り期限</Label>
+                    <Label htmlFor="handling-until">非表示期限</Label>
                     <Input
                       id="handling-until"
                       type="date"
@@ -780,7 +780,7 @@ export default function ItemsPage() {
                       onChange={(e) => setHandlingUntilDraft(e.target.value)}
                       disabled={isHandlingSaving || handlingStatusDraft !== 'deferred'}
                     />
-                    <p className="text-xs text-muted-foreground">未入力なら解除するまで見送りを維持します。</p>
+                    <p className="text-xs text-muted-foreground">未入力なら解除するまで非表示を維持します。</p>
                   </div>
 
                   <div className="grid gap-2">
@@ -789,7 +789,7 @@ export default function ItemsPage() {
                       id="handling-note"
                       value={handlingNoteDraft}
                       onChange={(e) => setHandlingNoteDraft(e.target.value)}
-                      placeholder="例: 季節商品のため今月は発注見送り"
+                      placeholder="例: 季節商品のため今月は非表示"
                       className="min-h-24"
                       disabled={isHandlingSaving}
                     />
@@ -799,7 +799,7 @@ export default function ItemsPage() {
                     handlingDialogItem.risk_level !== 'red' &&
                     handlingDialogItem.risk_level !== 'yellow' && (
                       <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-                        現在の実リスクは危険・警告ではないため、保存しても表示ステータスは見送りに変わりません。
+                        現在の実リスクは危険・警告ではないため、保存しても表示ステータスは非表示に変わりません。
                       </div>
                     )}
 
