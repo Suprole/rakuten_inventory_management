@@ -20,7 +20,7 @@ function validateSheetsSchema() {
     { name: 'yahoo_item_report_lm', required: ['商品コード', 'サブコード', '注文点数合計'] },
     { name: 'yahoo_item_report_cm', required: ['商品コード', 'サブコード', '注文点数合計'] },
     { name: 'po_header', required: ['po_id', 'created_at', 'status', 'supplier', 'note', 'sent_at'] },
-    { name: 'po_lines', required: ['po_id', 'line_no', 'internal_id', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'] },
+    { name: 'po_lines', required: ['po_id', 'line_no', 'internal_id', 'supplier_code', 'supplier_name', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'] },
     { name: 'po_item_last_sent', required: ['internal_id', 'last_sent_at', 'last_po_id'] },
   ];
 

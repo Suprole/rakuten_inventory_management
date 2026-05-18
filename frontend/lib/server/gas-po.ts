@@ -88,6 +88,8 @@ export async function poCreate(payload: {
   note?: string;
   lines: Array<{
     internal_id: string;
+    supplier_code?: string;
+    supplier_name?: string;
     qty: number;
     unit_cost?: number;
     basis_need_qty?: number;
@@ -107,6 +109,8 @@ export async function poConfirm(payload: {
   note?: string;
   lines: Array<{
     internal_id: string;
+    supplier_code?: string;
+    supplier_name?: string;
     qty: number;
     unit_cost?: number;
     basis_need_qty?: number;

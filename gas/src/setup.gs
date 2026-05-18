@@ -14,6 +14,8 @@ function setupMasterSpreadsheet() {
   createOrResetHeader_(ss, 'items', [
     'internal_id',
     'name',
+    'supplier_code',
+    'supplier_name',
     'default_unit_cost',
     'lot_size',
     'lead_time_days',
@@ -93,6 +95,8 @@ function setupMasterSpreadsheet() {
     'po_id',
     'line_no',
     'internal_id',
+    'supplier_code',
+    'supplier_name',
     'qty',
     'unit_cost',
     'basis_need_qty',

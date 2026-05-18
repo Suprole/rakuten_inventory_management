@@ -31,6 +31,8 @@ export const YahooListingMetricSchema = z.object({
 export const ItemMetricSchema = z.object({
   internal_id: z.string(),
   name: z.string(),
+  supplier_code: z.string().optional(),
+  supplier_name: z.string().optional(),
   // 発注用の参照情報（社内ID単位、任意・文字列）
   order_pack: z.string().optional(),
   order_unit: z.string().optional(),

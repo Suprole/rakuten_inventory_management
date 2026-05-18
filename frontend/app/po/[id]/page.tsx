@@ -244,6 +244,8 @@ export default function PODetailPage() {
                         <TableHead className="font-semibold">No.</TableHead>
                         <TableHead className="font-semibold">社内ID</TableHead>
                         <TableHead className="font-semibold">商品名</TableHead>
+                        <TableHead className="font-semibold">仕入先コード</TableHead>
+                        <TableHead className="font-semibold">仕入先名</TableHead>
                         <TableHead className="text-right font-semibold">
                           数量
                         </TableHead>
@@ -267,6 +269,12 @@ export default function PODetailPage() {
                           <TableCell className="font-medium">
                             {getItemName2(line.internal_id)}
                           </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {line.supplier_code || '-'}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {line.supplier_name || '-'}
+                          </TableCell>
                           <TableCell className="text-right font-mono">
                             {line.qty.toLocaleString()}
                           </TableCell>
@@ -282,7 +290,7 @@ export default function PODetailPage() {
                         </TableRow>
                       ))}
                       <TableRow className="bg-muted/50 hover:bg-muted/50">
-                        <TableCell colSpan={3} className="font-semibold">
+                        <TableCell colSpan={5} className="font-semibold">
                           合計
                         </TableCell>
                         <TableCell className="text-right font-mono font-semibold">

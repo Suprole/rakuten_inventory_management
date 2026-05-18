@@ -85,9 +85,12 @@ export default function POCartPage() {
     setIsSubmitting(true);
     try {
       const payload = {
+        supplier: cart.cart.supplier,
         note: cart.cart.note,
         lines: cart.lines.map((l) => ({
           internal_id: l.internal_id,
+          supplier_code: l.supplier_code,
+          supplier_name: l.supplier_name,
           qty: l.qty,
           unit_cost: l.unit_cost,
           basis_need_qty: l.basis_need_qty,
@@ -98,8 +101,8 @@ export default function POCartPage() {
       const res = await confirmPo(payload);
 
       // 成功（sent）
-      if (res && typeof res === 'object' && 'ok' in res && (res as any).ok === true) {
-        const poId = (res as any).po_id as string;
+      if (res.ok) {
+        const poId = res.po_id;
         cart.actions.clearCart();
         invalidateRemote('po:list');
         invalidateRemote('po:last-sent-by-item');
@@ -110,9 +113,9 @@ export default function POCartPage() {
       }
 
       // メール失敗（draft維持だがpo_idは返す）
-      if (res && typeof res === 'object' && 'error' in res && (res as any).error === 'mail_failed') {
-        const poId = (res as any).po_id as string | undefined;
-        const msg = (res as any).message as string | undefined;
+      if (res.error === 'mail_failed' && 'po_id' in res) {
+        const poId = res.po_id;
+        const msg = res.message;
         if (poId) {
           cart.actions.clearCart();
           invalidateRemote('po:list');
@@ -123,12 +126,7 @@ export default function POCartPage() {
         }
       }
 
-      const errMsg =
-        res && typeof res === 'object' && 'message' in res && typeof (res as any).message === 'string'
-          ? ((res as any).message as string)
-          : res && typeof res === 'object' && 'error' in res && typeof (res as any).error === 'string'
-            ? ((res as any).error as string)
-            : 'unknown_error';
+      const errMsg = 'message' in res && typeof res.message === 'string' ? res.message : res.error;
       throw new Error(errMsg);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

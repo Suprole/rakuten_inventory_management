@@ -122,15 +122,21 @@ function poCreate_(payload) {
       var line = payload.lines[i];
       if (!line || !line.internal_id) throw new Error('line.internal_id is required');
       var line_no = i + 1;
-      appendRow_('po_lines', ['po_id', 'line_no', 'internal_id', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'], {
+      appendRow_(
+        'po_lines',
+        ['po_id', 'line_no', 'internal_id', 'supplier_code', 'supplier_name', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'],
+        {
         po_id: po_id,
         line_no: line_no,
         internal_id: line.internal_id,
+        supplier_code: line.supplier_code || '',
+        supplier_name: line.supplier_name || '',
         qty: Number(line.qty || 0),
         unit_cost: line.unit_cost !== undefined ? Number(line.unit_cost) : '',
         basis_need_qty: line.basis_need_qty !== undefined ? Number(line.basis_need_qty) : '',
         basis_days_of_cover: line.basis_days_of_cover !== undefined ? Number(line.basis_days_of_cover) : '',
-      });
+      }
+      );
     }
 
     return { ok: true, po_id: po_id };
@@ -168,15 +174,21 @@ function poConfirm_(payload) {
       var line = payload.lines[i];
       if (!line || !line.internal_id) throw new Error('line.internal_id is required');
       var line_no = i + 1;
-      appendRow_('po_lines', ['po_id', 'line_no', 'internal_id', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'], {
+      appendRow_(
+        'po_lines',
+        ['po_id', 'line_no', 'internal_id', 'supplier_code', 'supplier_name', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'],
+        {
         po_id: po_id,
         line_no: line_no,
         internal_id: line.internal_id,
+        supplier_code: line.supplier_code || '',
+        supplier_name: line.supplier_name || '',
         qty: Number(line.qty || 0),
         unit_cost: line.unit_cost !== undefined ? Number(line.unit_cost) : '',
         basis_need_qty: line.basis_need_qty !== undefined ? Number(line.basis_need_qty) : '',
         basis_days_of_cover: line.basis_days_of_cover !== undefined ? Number(line.basis_days_of_cover) : '',
-      });
+      }
+      );
     }
 
     // 2) メール送信
@@ -279,7 +291,11 @@ function poDetail_(poId) {
   if (!header) return { ok: false, error: 'not_found' };
 
   var linesT = readTable_('po_lines');
-  requireCols(linesT.header, ['po_id', 'line_no', 'internal_id', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'], 'po_lines');
+  requireCols(
+    linesT.header,
+    ['po_id', 'line_no', 'internal_id', 'supplier_code', 'supplier_name', 'qty', 'unit_cost', 'basis_need_qty', 'basis_days_of_cover'],
+    'po_lines'
+  );
   var lines = [];
   for (var j = 0; j < linesT.rows.length; j++) {
     var lr = linesT.rows[j];
@@ -288,6 +304,8 @@ function poDetail_(poId) {
       po_id: toStringSafe(lr[linesT.header['po_id']]),
       line_no: Number(lr[linesT.header['line_no']] || 0),
       internal_id: toStringSafe(lr[linesT.header['internal_id']]),
+      supplier_code: toStringSafe(lr[linesT.header['supplier_code']]) || undefined,
+      supplier_name: toStringSafe(lr[linesT.header['supplier_name']]) || undefined,
       qty: Number(lr[linesT.header['qty']] || 0),
       unit_cost: lr[linesT.header['unit_cost']] === '' ? undefined : Number(lr[linesT.header['unit_cost']]),
       basis_need_qty: lr[linesT.header['basis_need_qty']] === '' ? undefined : Number(lr[linesT.header['basis_need_qty']]),
@@ -666,13 +684,13 @@ function buildPoCsv_(poId, sentDate, supplierVal, noteVal, lines) {
   if (supplierVal) rows.push(['サプライヤー', supplierVal]);
   if (noteVal) rows.push(['備考', noteVal]);
   rows.push([]); // 空行
-  rows.push(['発注ID', '商品コード', '商品名', '数量(個)', '単価', '合計額']);
+  rows.push(['発注ID', '商品コード', '商品名', '仕入先コード', '仕入先名', '数量(個)', '単価', '合計額']);
   for (var i = 0; i < lines.length; i++) {
     var ln = lines[i];
     var qty = Number(ln.qty || 0);
     var unitCost = ln.unit_cost !== undefined ? Number(ln.unit_cost) : 0;
     var amt = qty * unitCost;
-    rows.push([poId, ln.internal_id, ln.item_name || '', qty, yen_(unitCost), yen_(amt)]);
+    rows.push([poId, ln.internal_id, ln.item_name || '', ln.supplier_code || '', ln.supplier_name || '', qty, yen_(unitCost), yen_(amt)]);
   }
   var totalQty = 0;
   var totalAmount = 0;
@@ -708,6 +726,8 @@ function buildPoPdfBlob_(poId, sentDate, supplierVal, noteVal, lines, totalQty, 
         '<td style="border:1px solid #444;padding:6px;white-space:nowrap;">' + escapeHtml_(poId) + '</td>' +
         '<td style="border:1px solid #444;padding:6px;white-space:nowrap;">' + escapeHtml_(ln.internal_id) + '</td>' +
         '<td style="border:1px solid #444;padding:6px;">' + escapeHtml_(ln.item_name || '') + '</td>' +
+        '<td style="border:1px solid #444;padding:6px;white-space:nowrap;">' + escapeHtml_(ln.supplier_code || '') + '</td>' +
+        '<td style="border:1px solid #444;padding:6px;">' + escapeHtml_(ln.supplier_name || '') + '</td>' +
         '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(String(qty)) + '</td>' +
         '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(unitCost)) + '</td>' +
         '<td style="border:1px solid #444;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(amt)) + '</td>' +
@@ -739,6 +759,8 @@ function buildPoPdfBlob_(poId, sentDate, supplierVal, noteVal, lines, totalQty, 
           '<th>発注ID</th>' +
           '<th>商品コード</th>' +
           '<th>商品名</th>' +
+          '<th>仕入先コード</th>' +
+          '<th>仕入先名</th>' +
           '<th class="right">数量(個)</th>' +
           '<th class="right">単価</th>' +
           '<th class="right">合計額</th>' +
@@ -799,6 +821,8 @@ function sendPoEmailOnSent_(poId) {
         '<td style="border:1px solid #ddd;padding:6px;white-space:nowrap;">' + escapeHtml_(poId) + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;white-space:nowrap;">' + escapeHtml_(ln.internal_id) + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;">' + escapeHtml_(ln.item_name || '') + '</td>' +
+        '<td style="border:1px solid #ddd;padding:6px;white-space:nowrap;">' + escapeHtml_(ln.supplier_code || '') + '</td>' +
+        '<td style="border:1px solid #ddd;padding:6px;">' + escapeHtml_(ln.supplier_name || '') + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(String(qty)) + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(unitCost)) + '</td>' +
         '<td style="border:1px solid #ddd;padding:6px;text-align:right;white-space:nowrap;">' + escapeHtml_(yen_(amt)) + '</td>' +
@@ -821,6 +845,8 @@ function sendPoEmailOnSent_(poId) {
             '<th style="border:1px solid #ddd;padding:6px;text-align:left;">発注ID</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:left;">商品コード</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:left;">商品名</th>' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:left;">仕入先コード</th>' +
+            '<th style="border:1px solid #ddd;padding:6px;text-align:left;">仕入先名</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">数量(個)</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">単価</th>' +
             '<th style="border:1px solid #ddd;padding:6px;text-align:right;">合計額</th>' +
@@ -844,7 +870,15 @@ function sendPoEmailOnSent_(poId) {
     '\n' +
     '明細:\n' +
     lines.map(function (ln) {
-      return '- ' + ln.internal_id + (ln.item_name ? ' / ' + ln.item_name : '') + ' / 数量: ' + Number(ln.qty || 0);
+      return (
+        '- ' +
+        ln.internal_id +
+        (ln.item_name ? ' / ' + ln.item_name : '') +
+        (ln.supplier_code ? ' / 仕入先コード: ' + ln.supplier_code : '') +
+        (ln.supplier_name ? ' / 仕入先名: ' + ln.supplier_name : '') +
+        ' / 数量: ' +
+        Number(ln.qty || 0)
+      );
     }).join('\n') +
     '\n\n' +
     '件数: ' + lines.length + '\n' +

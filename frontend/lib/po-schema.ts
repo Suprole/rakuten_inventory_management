@@ -16,6 +16,8 @@ export const POLineSchema = z.object({
   po_id: z.string(),
   line_no: z.number(),
   internal_id: z.string(),
+  supplier_code: z.string().optional(),
+  supplier_name: z.string().optional(),
   qty: z.number(),
   unit_cost: z.number().optional(),
   basis_need_qty: z.number().optional(),
@@ -56,6 +58,8 @@ export const PoCreatePayloadSchema = z.object({
     .array(
       z.object({
         internal_id: z.string(),
+        supplier_code: z.string().optional(),
+        supplier_name: z.string().optional(),
         qty: z.number(),
         unit_cost: z.number().optional(),
         basis_need_qty: z.number().optional(),

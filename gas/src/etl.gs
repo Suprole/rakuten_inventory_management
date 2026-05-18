@@ -32,6 +32,8 @@ function readItems_() {
     out[internal_id] = {
       internal_id: internal_id,
       name: toStringSafe(row[header['name']]),
+      supplier_code: header['supplier_code'] !== undefined ? toStringSafe(row[header['supplier_code']]) : undefined,
+      supplier_name: header['supplier_name'] !== undefined ? toStringSafe(row[header['supplier_name']]) : undefined,
       // 発注用の参照情報（任意・文字列）
       order_pack: header['order_pack'] !== undefined ? toStringSafe(row[header['order_pack']]) : undefined,
       order_unit: header['order_unit'] !== undefined ? toStringSafe(row[header['order_unit']]) : undefined,
@@ -653,6 +655,8 @@ function runEtlOnce() {
     itemMetrics.push({
       internal_id: internal_id,
       name: item.name,
+      supplier_code: item.supplier_code,
+      supplier_name: item.supplier_name,
       order_pack: item.order_pack,
       order_unit: item.order_unit,
       order_amount: item.order_amount,

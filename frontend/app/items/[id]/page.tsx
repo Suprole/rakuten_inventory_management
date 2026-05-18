@@ -486,6 +486,22 @@ export default function ItemDetailPage() {
                   ¥{item.default_unit_cost?.toLocaleString() ?? '-'}
                 </span>
               </div>
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <span className="text-sm text-muted-foreground">
+                  仕入先コード
+                </span>
+                <span className="font-mono text-lg font-semibold text-foreground">
+                  {item.supplier_code || '-'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <span className="text-sm text-muted-foreground">
+                  仕入先名
+                </span>
+                <span className="text-right text-lg font-semibold text-foreground">
+                  {item.supplier_name || '-'}
+                </span>
+              </div>
               {item.reorder_qty_suggested > 0 && item.default_unit_cost && (
                 <div className="rounded-lg bg-primary/10 p-4">
                   <p className="text-sm text-muted-foreground">
@@ -516,6 +532,8 @@ export default function ItemDetailPage() {
                         cart.actions.addToCart({
                           internal_id: item.internal_id,
                           name: item.name,
+                          supplier_code: item.supplier_code,
+                          supplier_name: item.supplier_name,
                           qty: 0,
                           unit_cost: item.default_unit_cost ?? 0,
                           recommended_qty: item.reorder_qty_suggested,

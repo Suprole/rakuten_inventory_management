@@ -1,6 +1,8 @@
 export type CartLine = {
   internal_id: string;
   name: string;
+  supplier_code?: string;
+  supplier_name?: string;
   qty: number;
   unit_cost: number;
   recommended_qty?: number;
@@ -53,6 +55,8 @@ function normalizeCart(raw: unknown): Cart {
     const internal_id = typeof r.internal_id === 'string' ? r.internal_id : '';
     if (!internal_id) continue;
     const name = typeof r.name === 'string' ? r.name : internal_id;
+    const supplier_code = typeof r.supplier_code === 'string' ? r.supplier_code : undefined;
+    const supplier_name = typeof r.supplier_name === 'string' ? r.supplier_name : undefined;
     const unit_cost = typeof r.unit_cost === 'number' ? Math.max(0, r.unit_cost) : 0;
     const qty0 = typeof r.qty === 'number' ? r.qty : 0;
     const qty = Math.max(0, qty0);
@@ -71,6 +75,8 @@ function normalizeCart(raw: unknown): Cart {
     lines.push({
       internal_id,
       name,
+      supplier_code,
+      supplier_name,
       qty,
       unit_cost,
       recommended_qty,
@@ -176,6 +182,8 @@ export function setCartMeta(params: { supplier?: string; note?: string }) {
 export function addToCart(params: {
   internal_id: string;
   name: string;
+  supplier_code?: string;
+  supplier_name?: string;
   qty: number;
   unit_cost: number;
   recommended_qty?: number;
@@ -200,6 +208,8 @@ export function addToCart(params: {
       const nextLine: CartLine = {
         internal_id,
         name,
+        supplier_code: params.supplier_code,
+        supplier_name: params.supplier_name,
         qty: incomingQty,
         unit_cost,
         recommended_qty: recommendedQty,
@@ -218,6 +228,8 @@ export function addToCart(params: {
     const merged: CartLine = {
       ...existing,
       name: existing.name || name,
+      supplier_code: existing.supplier_code ?? params.supplier_code,
+      supplier_name: existing.supplier_name ?? params.supplier_name,
       qty,
       recommended_qty: existing.recommended_qty ?? recommendedQty,
       // 参照専用情報も、既存に無ければ補完（カートに入れ直し/追加時に埋められる）
@@ -239,7 +251,7 @@ export function updateLine(
   patch: Partial<
     Pick<
       CartLine,
-      'name' | 'qty' | 'unit_cost' | 'recommended_qty' | 'order_pack' | 'order_unit' | 'order_amount' | 'basis_need_qty' | 'basis_days_of_cover'
+      'name' | 'supplier_code' | 'supplier_name' | 'qty' | 'unit_cost' | 'recommended_qty' | 'order_pack' | 'order_unit' | 'order_amount' | 'basis_need_qty' | 'basis_days_of_cover'
     >
   >
 ) {
@@ -251,6 +263,8 @@ export function updateLine(
     const next: CartLine = {
       ...cur,
       name: patch.name !== undefined ? String(patch.name) : cur.name,
+      supplier_code: patch.supplier_code !== undefined ? String(patch.supplier_code) : cur.supplier_code,
+      supplier_name: patch.supplier_name !== undefined ? String(patch.supplier_name) : cur.supplier_name,
       unit_cost: patch.unit_cost !== undefined ? Math.max(0, Number(patch.unit_cost)) : cur.unit_cost,
       qty: patch.qty !== undefined ? Math.max(0, Number(patch.qty)) : cur.qty,
       recommended_qty:

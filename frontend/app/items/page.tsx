@@ -118,6 +118,8 @@ function matchesItemQuery(item: ItemMetric, q: string): boolean {
   if (!qq) return true;
   if (item.internal_id.toLowerCase().includes(qq)) return true;
   if (item.name.toLowerCase().includes(qq)) return true;
+  if ((item.supplier_code || '').toLowerCase().includes(qq)) return true;
+  if ((item.supplier_name || '').toLowerCase().includes(qq)) return true;
   // SKU/商品管理番号/楽天タイトル（ETLがlistingsを埋め込んでいる場合）
   if (item.listings && item.listings.length > 0) {
     for (const l of item.listings) {
@@ -257,6 +259,16 @@ const ItemTableRow = memo(function ItemTableRow({
         <span title={item.name} className="block max-w-[220px] truncate">
           {item.name}
         </span>
+      </TableCell>
+      <TableCell className="text-xs">
+        <div className="min-w-0">
+          <div className="truncate font-medium" title={item.supplier_name || '-'}>
+            {item.supplier_name || '-'}
+          </div>
+          <div className="font-mono text-muted-foreground" title={item.supplier_code || '-'}>
+            {item.supplier_code || '-'}
+          </div>
+        </div>
       </TableCell>
       <TableCell className="text-right font-mono pr-2">{item.derived_stock.toLocaleString()}</TableCell>
       <TableCell className="text-right font-mono pr-2">{formatYen(inventoryAmount)}</TableCell>
@@ -580,6 +592,8 @@ export default function ItemsPage() {
     cart.actions.addToCart({
       internal_id: item.internal_id,
       name: item.name,
+      supplier_code: item.supplier_code,
+      supplier_name: item.supplier_name,
       qty: 0,
       unit_cost: item.default_unit_cost ?? 0,
       recommended_qty: item.reorder_qty_suggested,
@@ -672,6 +686,8 @@ export default function ItemsPage() {
       '実リスク',
       '社内ID',
       '商品名',
+      '仕入先コード',
+      '仕入先名',
       '在庫数',
       '売上（先月）M',
       '売上（先月）W',
@@ -690,6 +706,8 @@ export default function ItemsPage() {
         getDisplayRiskLabel(item.risk_level),
         item.internal_id,
         item.name,
+        item.supplier_code || '',
+        item.supplier_name || '',
         String(item.derived_stock ?? 0),
         String(item.metro_last_month_sales ?? 0),
         String(item.windy_last_month_sales ?? 0),
@@ -893,7 +911,7 @@ export default function ItemsPage() {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="社内ID、商品名で検索..."
+                    placeholder="社内ID、商品名、仕入先で検索..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9"
@@ -1008,6 +1026,9 @@ export default function ItemsPage() {
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
+                      <TableHead className="sticky top-0 z-20 w-[160px] bg-card font-semibold">
+                        仕入先
+                      </TableHead>
                       <TableHead
                         className="sticky top-0 z-20 w-[88px] cursor-pointer bg-card pr-2 text-right font-semibold hover:text-foreground"
                         onClick={() => handleSort('derived_stock')}
@@ -1070,7 +1091,7 @@ export default function ItemsPage() {
                   <TableBody>
                     {itemMetricsState.status === 'loading' ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="h-24 text-center">
+                        <TableCell colSpan={12} className="h-24 text-center">
                           <p className="text-muted-foreground">読み込み中...</p>
                         </TableCell>
                       </TableRow>
@@ -1078,7 +1099,7 @@ export default function ItemsPage() {
                       <>
                         <TableRow className="border-b-2 bg-muted/70 hover:bg-muted/70">
                           <TableCell className="sticky top-10 z-10 bg-muted/70 font-semibold">合計</TableCell>
-                          <TableCell className="sticky top-10 z-10 bg-muted/70" colSpan={3}>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70" colSpan={4}>
                             <span className="text-sm text-muted-foreground">
                               表示中 {filteredAndSortedItems.length} 件
                             </span>
@@ -1115,7 +1136,7 @@ export default function ItemsPage() {
                       </>
                     ) : filteredAndSortedItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="h-24 text-center">
+                        <TableCell colSpan={12} className="h-24 text-center">
                           <p className="text-muted-foreground">
                             該当する商品が見つかりませんでした
                           </p>
@@ -1125,7 +1146,7 @@ export default function ItemsPage() {
                       <>
                         <TableRow className="border-b-2 bg-muted/70 hover:bg-muted/70">
                           <TableCell className="sticky top-10 z-10 bg-muted/70 font-semibold">合計</TableCell>
-                          <TableCell className="sticky top-10 z-10 bg-muted/70" colSpan={3}>
+                          <TableCell className="sticky top-10 z-10 bg-muted/70" colSpan={4}>
                             <span className="text-sm text-muted-foreground">
                               表示中 {filteredAndSortedItems.length} 件
                             </span>
